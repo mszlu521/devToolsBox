@@ -360,8 +360,16 @@ const resolveImageUrl = (src: string, basePath?: string): string => {
   return `mdimage://${encodeURIComponent(normalizedPath)}`
 }
 
+// 缓存 markdown-it 实例，避免重复创建
+let cachedMd: MarkdownIt | null = null
+
 // 创建并配置 markdown-it 实例
 const createMarkdownIt = (): MarkdownIt => {
+  // 如果已有缓存实例，直接返回
+  if (cachedMd) {
+    return cachedMd
+  }
+
   const md = new MarkdownIt({
     html: true,
     xhtmlOut: false,
@@ -377,13 +385,9 @@ const createMarkdownIt = (): MarkdownIt => {
         } catch {
           highlighted = str
         }
-      } else {
-        try {
-          highlighted = hljs.highlightAuto(str).value
-        } catch {
-          highlighted = str
-        }
       }
+      // 移除 highlightAuto 调用，大幅提升性能
+      // 未指定语言的代码块保持原样，避免昂贵的自动检测
       return `<pre class="hljs"><code class="hljs language-${lang || 'plaintext'}">${highlighted}</code></pre>\n`
     }
   })
@@ -391,6 +395,8 @@ const createMarkdownIt = (): MarkdownIt => {
   md.use(taskLists as any, { enabled: true, label: true, labelAfter: true })
   md.use(anchor as any, { permalink: false })
 
+  // 缓存实例
+  cachedMd = md
   return md
 }
 

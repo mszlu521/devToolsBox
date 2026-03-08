@@ -13,6 +13,26 @@ const isDev = process.env.NODE_ENV === 'development'
 let mainWindow: BrowserWindow | null = null
 let tray: Tray | null = null
 
+// ========== 单实例锁定 ==========
+const gotTheLock = app.requestSingleInstanceLock()
+
+if (!gotTheLock) {
+  // 如果没有获得锁，说明已有实例在运行，退出当前实例
+  app.quit()
+} else {
+  // 监听第二个实例启动事件
+  app.on('second-instance', (_event, _commandLine, _workingDirectory) => {
+    // 如果主窗口存在，则聚焦到它
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) {
+        mainWindow.restore()
+      }
+      mainWindow.focus()
+      mainWindow.show()
+    }
+  })
+}
+
 // 关闭行为设置：'tray' | 'close'
 let closeToTray = true
 let isQuiting = false

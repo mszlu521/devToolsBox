@@ -20,7 +20,7 @@
     "path",
     "manager"
   ],
-  "author": "EnvPath Manager",
+  "author": "www.mszlu.com",
   "license": "MIT",
   "devDependencies": {
     "@types/markdown-it": "^14.1.2",

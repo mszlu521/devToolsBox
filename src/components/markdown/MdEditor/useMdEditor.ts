@@ -3,6 +3,19 @@ import { renderMarkdown, themeConfigs, generateThemeStyles } from '../../../comp
 import hljs from 'highlight.js'
 import type { EditorMode, PreviewTheme, OutlineItem, EditorState } from './types'
 
+// ==================== 防抖工具函数 ====================
+
+function debounce<T extends (...args: any[]) => any>(fn: T, delay: number): (...args: Parameters<T>) => void {
+  let timer: ReturnType<typeof setTimeout> | null = null
+  return function (this: any, ...args: Parameters<T>) {
+    if (timer) clearTimeout(timer)
+    timer = setTimeout(() => {
+      fn.apply(this, args)
+      timer = null
+    }, delay)
+  }
+}
+
 export interface UseMdEditorOptions {
   content: Ref<string>
   filePath: Ref<string | undefined>
@@ -101,6 +114,9 @@ export function useMdEditor(options: UseMdEditorOptions) {
     }
   }
 
+  // 防抖版本，用于大文档实时编辑
+  const debouncedUpdateWysiwygContent = debounce(updateWysiwygContent, 200)
+
   const updateEditorStyles = (themeValue: PreviewTheme) => {
     let styleEl = document.getElementById('wysiwyg-dynamic-styles')
     if (!styleEl) {
@@ -111,10 +127,19 @@ export function useMdEditor(options: UseMdEditorOptions) {
     styleEl.textContent = generateThemeStyles(themeValue)
   }
 
-  const highlightCodeBlocks = () => {
-    if (!wysiwygEditorRef.value) return
-    const blocks = wysiwygEditorRef.value.querySelectorAll('pre code:not(.hljs-highlighted)')
-    blocks.forEach((block) => {
+  // 高亮处理的队列，用于分批处理大量代码块
+  let highlightQueue: Element[] = []
+  let highlightTimer: ReturnType<typeof setTimeout> | null = null
+
+  const processHighlightQueue = () => {
+    if (highlightQueue.length === 0) {
+      highlightTimer = null
+      return
+    }
+
+    // 每批处理 10 个代码块
+    const batch = highlightQueue.splice(0, 10)
+    batch.forEach((block) => {
       const element = block as HTMLElement
       const langClass = Array.from(element.classList).find(c => c.startsWith('language-'))
       const lang = langClass ? langClass.replace('language-', '') : ''
@@ -124,7 +149,9 @@ export function useMdEditor(options: UseMdEditorOptions) {
         if (lang && lang !== 'plaintext' && hljs.getLanguage(lang)) {
           result = hljs.highlight(element.textContent || '', { language: lang })
         } else {
-          result = hljs.highlightAuto(element.textContent || '')
+          // 移除 highlightAuto，直接使用纯文本避免性能问题
+          element.classList.add('hljs', 'hljs-highlighted')
+          return
         }
         element.innerHTML = result.value
         element.classList.add('hljs', 'hljs-highlighted')
@@ -132,6 +159,52 @@ export function useMdEditor(options: UseMdEditorOptions) {
         console.warn('Code highlight failed:', e)
       }
     })
+
+    // 继续处理下一批
+    if (highlightQueue.length > 0) {
+      highlightTimer = setTimeout(processHighlightQueue, 16) // 约 60fps
+    } else {
+      highlightTimer = null
+    }
+  }
+
+  const highlightCodeBlocks = () => {
+    if (!wysiwygEditorRef.value) return
+    
+    // 取消之前的队列处理
+    if (highlightTimer) {
+      clearTimeout(highlightTimer)
+      highlightTimer = null
+    }
+    
+    const blocks = Array.from(wysiwygEditorRef.value.querySelectorAll('pre code:not(.hljs-highlighted)'))
+    
+    // 如果代码块数量较少，直接处理
+    if (blocks.length <= 20) {
+      blocks.forEach((block) => {
+        const element = block as HTMLElement
+        const langClass = Array.from(element.classList).find(c => c.startsWith('language-'))
+        const lang = langClass ? langClass.replace('language-', '') : ''
+
+        try {
+          let result
+          if (lang && lang !== 'plaintext' && hljs.getLanguage(lang)) {
+            result = hljs.highlight(element.textContent || '', { language: lang })
+          } else {
+            element.classList.add('hljs', 'hljs-highlighted')
+            return
+          }
+          element.innerHTML = result.value
+          element.classList.add('hljs', 'hljs-highlighted')
+        } catch (e) {
+          console.warn('Code highlight failed:', e)
+        }
+      })
+    } else {
+      // 大量代码块时使用队列分批处理
+      highlightQueue = blocks
+      processHighlightQueue()
+    }
   }
 
   // ==================== 光标位置管理 ====================
@@ -743,6 +816,7 @@ export function useMdEditor(options: UseMdEditorOptions) {
     currentThemeStyle,
     outline,
     updateWysiwygContent,
+    debouncedUpdateWysiwygContent,
     highlightCodeBlocks,
     handleWysiwygInput,
     handleWysiwygKeydown,

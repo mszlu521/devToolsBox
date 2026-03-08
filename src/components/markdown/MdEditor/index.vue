@@ -58,6 +58,7 @@ const {
   currentThemeStyle,
   outline,
   updateWysiwygContent,
+  debouncedUpdateWysiwygContent,
   highlightCodeBlocks,
   handleWysiwygInput,
   handleWysiwygKeydown,
@@ -123,11 +124,21 @@ defineExpose({
 
 // ==================== 监听 ====================
 
+// 大文档阈值（字符数）
+const LARGE_DOC_THRESHOLD = 5000
+
 watch(() => props.modelValue, (newVal, oldVal) => {
   if (!state.isUpdating && editorMode.value === 'wysiwyg' && newVal !== oldVal) {
-    nextTick(() => {
-      updateWysiwygContent()
-    })
+    // 根据文档大小选择更新策略
+    if (newVal.length > LARGE_DOC_THRESHOLD) {
+      // 大文档使用防抖，避免频繁渲染导致卡顿
+      debouncedUpdateWysiwygContent()
+    } else {
+      // 小文档直接更新
+      nextTick(() => {
+        updateWysiwygContent()
+      })
+    }
   }
 }, { immediate: true })
 

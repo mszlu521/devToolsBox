@@ -1,6 +1,30 @@
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount, watch, computed } from 'vue'
 import { Editor, EditorContent } from '@tiptap/vue-3'
+
+// 防抖函数
+function debounce<T extends (...args: any[]) => any>(fn: T, delay: number): (...args: Parameters<T>) => void {
+  let timer: ReturnType<typeof setTimeout> | null = null
+  return function (this: any, ...args: Parameters<T>) {
+    if (timer) clearTimeout(timer)
+    timer = setTimeout(() => {
+      fn.apply(this, args)
+      timer = null
+    }, delay)
+  }
+}
+
+// 节流函数
+function throttle<T extends (...args: any[]) => any>(fn: T, limit: number): (...args: Parameters<T>) => void {
+  let inThrottle = false
+  return function (this: any, ...args: Parameters<T>) {
+    if (!inThrottle) {
+      fn.apply(this, args)
+      inThrottle = true
+      setTimeout(() => inThrottle = false, limit)
+    }
+  }
+}
 import StarterKit from '@tiptap/starter-kit'
 import { Table } from '@tiptap/extension-table'
 import { TableRow } from '@tiptap/extension-table-row'
@@ -38,6 +62,9 @@ const editorContainer = ref<HTMLDivElement>()
 const isFocused = ref(false)
 const showSource = ref(false)
 const currentTheme = computed(() => props.theme || 'default')
+
+// 用于防止父子组件间的循环更新
+let isUpdatingFromParent = false
 
 // 根据当前主题生成 CSS 变量
 const themeStyles = computed(() => {
@@ -158,9 +185,25 @@ interface MarkerPluginState {
   cursorPos: number | null
 }
 
-// Typora 风格标记符插件 - 根据光标位置显示/隐藏 Markdown 标记符
+// 预编译的正则表达式，避免重复创建
+const MARKER_REGEX = {
+  // 粗体 **text** - 使用非贪婪匹配，避免回溯
+  bold: /\*\*[^*]+?\*\*/g,
+  // 斜体 *text* 或 _text_ - 简化的正则，避免复杂的负向断言
+  italic: /(?:^|\s)\*([^\s*][^*]*?)\*(?:\s|$)|_([^_]+?)_/g,
+  // 行内代码 `code`
+  code: /`[^`]+?`/g,
+  // 删除线 ~~text~~
+  strike: /~~[^~]+?~~/g
+}
+
+// Typora 风格标记符插件 - 优化性能版本
 const createMarkerPlugin = (): AnyExtension => {
   const markerPluginKey = new PluginKey<MarkerPluginState>('marker-visibility')
+  
+  // 缓存装饰器结果
+  let lastCursorPos: number | null = null
+  let lastDecorations: DecorationSet = DecorationSet.empty
   
   const plugin = new Plugin<MarkerPluginState>({
     key: markerPluginKey,
@@ -185,67 +228,70 @@ const createMarkerPlugin = (): AnyExtension => {
       decorations: (state): DecorationSet => {
         const pluginState = markerPluginKey.getState(state)
         const cursorPos = pluginState?.cursorPos
-        const decorations: Decoration[] = []
         
         if (cursorPos === null || cursorPos === undefined) {
           return DecorationSet.empty
         }
         
+        // 如果光标位置没有变化，返回缓存的装饰器
+        if (cursorPos === lastCursorPos && lastDecorations !== DecorationSet.empty) {
+          return lastDecorations
+        }
+        
+        const decorations: Decoration[] = []
         const { doc } = state
         
-        // 遍历文档中的所有标记符节点
-        doc.descendants((node, pos) => {
+        // 优化的遍历策略：只处理光标附近的节点
+        // 定义一个合理的范围（前后 5000 字符）
+        const rangeStart = Math.max(0, cursorPos - 5000)
+        const rangeEnd = Math.min(doc.content.size, cursorPos + 5000)
+        
+        // 限制处理的节点数量
+        let processedNodes = 0
+        const MAX_NODES = 500
+        
+        doc.nodesBetween(rangeStart, rangeEnd, (node, pos) => {
+          if (processedNodes >= MAX_NODES) return false
+          processedNodes++
+          
           const nodeEnd = pos + node.nodeSize
           
-          // 检查光标是否在这个节点内或附近
-          const isNearCursor = cursorPos >= pos - 2 && cursorPos <= nodeEnd + 2
+          // 快速跳过：如果节点完全不在范围内
+          if (nodeEnd < rangeStart || pos > rangeEnd) return true
           
-          if (!isNearCursor) {
-            // 隐藏标记符 - 通过添加 decoration 来隐藏
-            if (node.type.name === 'heading') {
-              // 隐藏标题的 # 标记
-              const level = node.attrs.level as number
-              const markerText = '#'.repeat(level) + ' '
-              decorations.push(
-                Decoration.widget(pos, () => {
-                  const span = document.createElement('span')
-                  span.className = 'typora-marker typora-marker-hidden'
-                  span.textContent = markerText
-                  return span
-                }, { side: -1 })
-              )
-            }
-          } else {
-            // 光标附近 - 显示标记符
-            if (node.type.name === 'heading') {
-              const level = node.attrs.level as number
-              const markerText = '#'.repeat(level) + ' '
-              decorations.push(
-                Decoration.widget(pos, () => {
-                  const span = document.createElement('span')
-                  span.className = 'typora-marker typora-marker-visible'
-                  span.textContent = markerText
-                  return span
-                }, { side: -1 })
-              )
-            }
+          // 检查光标是否在这个节点内或附近（扩大检测范围到 50 字符）
+          const isNearCursor = cursorPos >= pos - 50 && cursorPos <= nodeEnd + 50
+          
+          // 处理标题标记符
+          if (node.type.name === 'heading') {
+            const level = node.attrs.level as number
+            const markerText = '#'.repeat(level) + ' '
+            const isVisible = isNearCursor
+            decorations.push(
+              Decoration.widget(pos, () => {
+                const span = document.createElement('span')
+                span.className = isVisible
+                  ? 'typora-marker typora-marker-visible'
+                  : 'typora-marker typora-marker-hidden'
+                span.textContent = markerText
+                return span
+              }, { side: -1 })
+            )
           }
           
-          // 处理行内标记符
-          if (node.isText && node.text) {
+          // 处理行内标记符 - 仅在光标附近时处理
+          if (isNearCursor && node.isText && node.text) {
             const text = node.text
             
             // 粗体 **text**
-            const boldRegex = /\*\*([^*]+)\*\*/g
             let match: RegExpExecArray | null
-            while ((match = boldRegex.exec(text)) !== null) {
+            MARKER_REGEX.bold.lastIndex = 0
+            while ((match = MARKER_REGEX.bold.exec(text)) !== null) {
               const matchStart = pos + match.index
               const matchEnd = matchStart + match[0].length
-              const isCursorInRange = cursorPos !== null && cursorPos !== undefined && 
-                cursorPos >= matchStart - 1 && cursorPos <= matchEnd + 1
+              const isCursorInRange = cursorPos >= matchStart - 5 && cursorPos <= matchEnd + 5
               
               if (!isCursorInRange) {
-                // 隐藏 ** 标记符
                 decorations.push(
                   Decoration.inline(matchStart, matchStart + 2, {
                     class: 'typora-marker-hidden'
@@ -257,20 +303,20 @@ const createMarkerPlugin = (): AnyExtension => {
               }
             }
             
-            // 斜体 *text* 或 _text_
-            const italicRegex = /(?<!\*)\*([^*]+)\*(?!\*)|_([^_]+)_/g
-            while ((match = italicRegex.exec(text)) !== null) {
-              const matchStart = pos + match.index
-              const matchEnd = matchStart + match[0].length
-              const isCursorInRange = cursorPos !== null && cursorPos !== undefined && 
-                cursorPos >= matchStart - 1 && cursorPos <= matchEnd + 1
+            // 斜体 *text* - 使用简化版正则
+            MARKER_REGEX.italic.lastIndex = 0
+            while ((match = MARKER_REGEX.italic.exec(text)) !== null) {
+              const matchStart = pos + match.index + (match[0].startsWith(' ') ? 1 : 0)
+              const matchEnd = matchStart + match[0].trim().length
+              const isCursorInRange = cursorPos >= matchStart - 5 && cursorPos <= matchEnd + 5
               
               if (!isCursorInRange) {
+                const markerLen = match[0].trim().startsWith('_') ? 1 : 1
                 decorations.push(
-                  Decoration.inline(matchStart, matchStart + 1, {
+                  Decoration.inline(matchStart, matchStart + markerLen, {
                     class: 'typora-marker-hidden'
                   }),
-                  Decoration.inline(matchEnd - 1, matchEnd, {
+                  Decoration.inline(matchEnd - markerLen, matchEnd, {
                     class: 'typora-marker-hidden'
                   })
                 )
@@ -278,12 +324,11 @@ const createMarkerPlugin = (): AnyExtension => {
             }
             
             // 行内代码 `code`
-            const codeRegex = /`([^`]+)`/g
-            while ((match = codeRegex.exec(text)) !== null) {
+            MARKER_REGEX.code.lastIndex = 0
+            while ((match = MARKER_REGEX.code.exec(text)) !== null) {
               const matchStart = pos + match.index
               const matchEnd = matchStart + match[0].length
-              const isCursorInRange = cursorPos !== null && cursorPos !== undefined && 
-                cursorPos >= matchStart - 1 && cursorPos <= matchEnd + 1
+              const isCursorInRange = cursorPos >= matchStart - 5 && cursorPos <= matchEnd + 5
               
               if (!isCursorInRange) {
                 decorations.push(
@@ -298,12 +343,11 @@ const createMarkerPlugin = (): AnyExtension => {
             }
             
             // 删除线 ~~text~~
-            const strikeRegex = /~~([^~]+)~~/g
-            while ((match = strikeRegex.exec(text)) !== null) {
+            MARKER_REGEX.strike.lastIndex = 0
+            while ((match = MARKER_REGEX.strike.exec(text)) !== null) {
               const matchStart = pos + match.index
               const matchEnd = matchStart + match[0].length
-              const isCursorInRange = cursorPos !== null && cursorPos !== undefined && 
-                cursorPos >= matchStart - 1 && cursorPos <= matchEnd + 1
+              const isCursorInRange = cursorPos >= matchStart - 5 && cursorPos <= matchEnd + 5
               
               if (!isCursorInRange) {
                 decorations.push(
@@ -321,19 +365,21 @@ const createMarkerPlugin = (): AnyExtension => {
           return true
         })
         
-        return DecorationSet.create(doc, decorations)
+        lastCursorPos = cursorPos
+        lastDecorations = DecorationSet.create(doc, decorations)
+        return lastDecorations
       },
       handleDOMEvents: {
-        mousemove(view): boolean {
+        mousemove: throttle((view): boolean => {
           const pos = view.state.selection.anchor
           view.dispatch(view.state.tr.setMeta('cursorPosition', pos))
           return false
-        },
-        keydown(view): boolean {
+        }, 50), // 节流到 50ms
+        keydown: throttle((view): boolean => {
           const pos = view.state.selection.anchor
           view.dispatch(view.state.tr.setMeta('cursorPosition', pos))
           return false
-        },
+        }, 50),
         click(view): boolean {
           const pos = view.state.selection.anchor
           view.dispatch(view.state.tr.setMeta('cursorPosition', pos))
@@ -449,6 +495,9 @@ onMounted(() => {
     editable: true,
     autofocus: false,
     onUpdate: ({ editor: e }) => {
+      // 如果正在从父组件更新，跳过此次 onUpdate
+      if (isUpdatingFromParent) return
+      
       // 使用 tiptap-markdown 获取 Markdown 内容
       let markdown = (e.storage as any).markdown?.getMarkdown() || ''
       
@@ -468,9 +517,6 @@ onMounted(() => {
       })
       
       // 修复块级元素之间的换行问题：确保图片和后续内容之间有换行符
-      // 注意：tiptap-markdown 序列化时图片和后续内容直接连接没有换行符
-      // 在图片后面添加换行符，但避免重复添加
-      const beforeFix = markdown
       // 匹配图片后直接跟着非换行字符的情况，添加换行符
       markdown = markdown.replace(/(!\[[^\]]*\]\([^)]+\))(?=[^\n])/g, '$1\n')
       
@@ -496,11 +542,19 @@ onBeforeUnmount(() => {
 
 // 监听外部值变化
 watch(() => props.modelValue, (newValue) => {
-  if (editor.value) {
+  if (editor.value && !isUpdatingFromParent) {
     const currentMarkdown = (editor.value.storage as any).markdown?.getMarkdown() || ''
-    if (newValue !== currentMarkdown) {
-      // 直接设置 Markdown 内容，由扩展自动解析
-      editor.value.commands.setContent(newValue || '')
+    // 规范化比较：移除末尾换行符差异
+    const normalizedNew = (newValue || '').replace(/\n+$/, '')
+    const normalizedCurrent = currentMarkdown.replace(/\n+$/, '')
+    
+    if (normalizedNew !== normalizedCurrent) {
+      isUpdatingFromParent = true
+      // 使用 setTimeout 避免同步更新导致的循环
+      setTimeout(() => {
+        editor.value?.commands.setContent(newValue || '')
+        isUpdatingFromParent = false
+      }, 0)
     }
   }
 })
