@@ -717,7 +717,6 @@ function markdownToHtml(markdown: string): string {
     return result.join('\n')
   }
   html = processAllLists(html)
-  console.log('After processAllLists:', html.substring(0, 500))
   
   // 粗体（必须在列表处理后执行，避免把列表标记 * 误认为粗体）
   html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
@@ -914,7 +913,6 @@ function markdownToHtml(markdown: string): string {
 function htmlToMarkdown(html: string): string {
   if (!html) return ''
   
-  console.log('htmlToMarkdown input:', html.substring(0, 300))
   
   // 创建一个临时的 DOM 元素
   const temp = document.createElement('div')

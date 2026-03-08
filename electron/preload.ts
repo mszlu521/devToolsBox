@@ -2,6 +2,14 @@ import { contextBridge, ipcRenderer } from 'electron'
 
 // 暴露给渲染进程的 API
 contextBridge.exposeInMainWorld('electronAPI', {
+  // 应用配置
+  getAppSettings: () => ipcRenderer.invoke('get-app-settings'),
+  saveAppSettings: (data: any) => ipcRenderer.invoke('save-app-settings', data),
+  
+  // 关闭行为设置
+  getCloseBehavior: () => ipcRenderer.invoke('get-close-behavior'),
+  updateCloseBehavior: (behavior: 'tray' | 'close') => ipcRenderer.invoke('update-close-behavior', behavior),
+  
   // 数据操作
   getData: () => ipcRenderer.invoke('get-data'),
   saveData: (data: EnvData) => ipcRenderer.invoke('save-data', data),
@@ -58,6 +66,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getTodoData: () => ipcRenderer.invoke('get-todo-data'),
   saveTodoData: (data: { todos: any[], projects: any[], categories?: any[] }) =>
     ipcRenderer.invoke('save-todo-data', data),
+
+  // Markdown 笔记设置持久化
+  getMdNotesData: () => ipcRenderer.invoke('get-md-notes-data'),
+  saveMdNotesData: (data: any) => ipcRenderer.invoke('save-md-notes-data', data),
 
   // Markdown 笔记文件管理
   mdReadDirectory: (dirPath: string) =>

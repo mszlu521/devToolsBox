@@ -14,57 +14,72 @@ export interface FavoriteFile {
   addedAt: number
 }
 
+export interface MdNotesSettings {
+  workspacePath: string
+  previewTheme: string
+  autoSave: boolean
+}
+
 export const useMdStore = defineStore('md', () => {
   // 最近打开的文件历史（最多20个）
   const recentFiles = ref<FileInfo[]>([])
-  
+
   // 收藏的文件
   const favorites = ref<FavoriteFile[]>([])
-  
+
   // 当前工作区路径
   const workspacePath = ref<string>('')
-  
+
   // 当前选中的文件
   const selectedFile = ref<string>('')
-  
+
   // 多标签页打开的文件
   const openTabs = ref<string[]>([])
-  
+
   // 固定的标签页
   const pinnedTabs = ref<string[]>([])
-  
-  // 加载数据
-  const loadData = () => {
+
+  // 编辑器设置
+  const previewTheme = ref<string>('default')
+  const autoSave = ref<boolean>(true)
+
+  // 从文件系统加载数据
+  const loadData = async () => {
     try {
-      const saved = localStorage.getItem('md-store')
-      if (saved) {
-        const data = JSON.parse(saved)
-        recentFiles.value = data.recentFiles || []
-        favorites.value = data.favorites || []
-        workspacePath.value = data.workspacePath || ''
-        pinnedTabs.value = data.pinnedTabs || []
+      const result = await window.electronAPI.getMdNotesData()
+      if (result.success && result.data) {
+        workspacePath.value = result.data.workspacePath || ''
+        previewTheme.value = result.data.previewTheme || 'default'
+        autoSave.value = result.data.autoSave !== false
+        recentFiles.value = result.data.recentFiles || []
+        favorites.value = result.data.favorites || []
+        pinnedTabs.value = result.data.pinnedTabs || []
       }
     } catch (e) {
-      console.error('加载 Markdown 存储数据失败:', e)
+      console.error('[mdStore] Failed to load data:', e)
     }
   }
-  
-  // 保存数据
-  const saveData = () => {
+
+  // 保存数据到文件系统
+  const saveData = async () => {
     try {
-      localStorage.setItem('md-store', JSON.stringify({
+      // 使用 JSON 序列化/反序列化转换为普通对象
+      const data = JSON.parse(JSON.stringify({
+        workspacePath: workspacePath.value,
+        previewTheme: previewTheme.value,
+        autoSave: autoSave.value,
         recentFiles: recentFiles.value,
         favorites: favorites.value,
-        workspacePath: workspacePath.value,
         pinnedTabs: pinnedTabs.value
       }))
+      await window.electronAPI.saveMdNotesData(data)
     } catch (e) {
-      console.error('保存 Markdown 存储数据失败:', e)
+      console.error('[mdStore] Failed to save data:', e)
     }
   }
-  
+
   // 添加到最近文件
-  const addToRecent = (file: FileInfo) => {
+  const addToRecent = async (file: FileInfo) => {
     // 移除已存在的相同文件
     recentFiles.value = recentFiles.value.filter(f => f.path !== file.path)
     // 添加到开头
@@ -76,58 +91,70 @@ export const useMdStore = defineStore('md', () => {
     if (recentFiles.value.length > 20) {
       recentFiles.value = recentFiles.value.slice(0, 20)
     }
-    saveData()
+    await saveData()
   }
-  
+
   // 从最近文件中移除
-  const removeFromRecent = (path: string) => {
+  const removeFromRecent = async (path: string) => {
     recentFiles.value = recentFiles.value.filter(f => f.path !== path)
-    saveData()
+    await saveData()
   }
-  
+
   // 清空最近文件
-  const clearRecent = () => {
+  const clearRecent = async () => {
     recentFiles.value = []
-    saveData()
+    await saveData()
   }
-  
+
   // 添加收藏
-  const addFavorite = (file: { path: string; name: string }) => {
+  const addFavorite = async (file: { path: string; name: string }) => {
     if (!favorites.value.some(f => f.path === file.path)) {
       favorites.value.push({
         ...file,
         addedAt: Date.now()
       })
-      saveData()
+      await saveData()
     }
   }
-  
+
   // 移除收藏
-  const removeFavorite = (path: string) => {
+  const removeFavorite = async (path: string) => {
     favorites.value = favorites.value.filter(f => f.path !== path)
-    saveData()
+    await saveData()
   }
-  
+
   // 切换收藏状态
-  const toggleFavorite = (file: { path: string; name: string }) => {
+  const toggleFavorite = async (file: { path: string; name: string }) => {
     if (favorites.value.some(f => f.path === file.path)) {
-      removeFavorite(file.path)
+      await removeFavorite(file.path)
     } else {
-      addFavorite(file)
+      await addFavorite(file)
     }
   }
-  
+
   // 检查是否已收藏
   const isFavorite = (path: string) => {
     return favorites.value.some(f => f.path === path)
   }
-  
+
   // 设置工作区
-  const setWorkspace = (path: string) => {
+  const setWorkspace = async (path: string) => {
     workspacePath.value = path
-    saveData()
+    await saveData()
   }
-  
+
+  // 设置主题
+  const setPreviewTheme = async (theme: string) => {
+    previewTheme.value = theme
+    await saveData()
+  }
+
+  // 设置自动保存
+  const setAutoSave = async (value: boolean) => {
+    autoSave.value = value
+    await saveData()
+  }
+
   // 打开标签页
   const openTab = (path: string) => {
     if (!openTabs.value.includes(path)) {
@@ -135,12 +162,12 @@ export const useMdStore = defineStore('md', () => {
     }
     selectedFile.value = path
   }
-  
+
   // 关闭标签页
   const closeTab = (path: string) => {
     const index = openTabs.value.indexOf(path)
     openTabs.value = openTabs.value.filter(p => p !== path)
-    
+
     // 如果关闭的是当前选中的文件，切换到相邻的标签
     if (selectedFile.value === path && openTabs.value.length > 0) {
       const newIndex = Math.min(index, openTabs.value.length - 1)
@@ -149,23 +176,23 @@ export const useMdStore = defineStore('md', () => {
       selectedFile.value = ''
     }
   }
-  
-  // 固定/取消固定标签页
-  const togglePinTab = (path: string) => {
+
+  // 切换标签固定状态
+  const togglePinTab = async (path: string) => {
     if (pinnedTabs.value.includes(path)) {
       pinnedTabs.value = pinnedTabs.value.filter(p => p !== path)
     } else {
       pinnedTabs.value.push(path)
     }
-    saveData()
+    await saveData()
   }
-  
-  // 检查是否已固定
+
+  // 检查标签是否已固定
   const isPinned = (path: string) => {
     return pinnedTabs.value.includes(path)
   }
-  
-  // 按固定状态排序的标签页
+
+  // 排序后的标签页（固定的在前）
   const sortedTabs = computed(() => {
     return [...openTabs.value].sort((a, b) => {
       const aPinned = pinnedTabs.value.includes(a)
@@ -175,13 +202,13 @@ export const useMdStore = defineStore('md', () => {
       return 0
     })
   })
-  
+
   // 清除不在工作区的最近文件
-  const cleanupRecent = (workspace: string) => {
+  const cleanupRecent = async (workspace: string) => {
     recentFiles.value = recentFiles.value.filter(f => f.path.startsWith(workspace))
-    saveData()
+    await saveData()
   }
-  
+
   return {
     recentFiles,
     favorites,
@@ -189,8 +216,11 @@ export const useMdStore = defineStore('md', () => {
     selectedFile,
     openTabs,
     pinnedTabs,
+    previewTheme,
+    autoSave,
     sortedTabs,
     loadData,
+    saveData,
     addToRecent,
     removeFromRecent,
     clearRecent,
@@ -199,6 +229,8 @@ export const useMdStore = defineStore('md', () => {
     toggleFavorite,
     isFavorite,
     setWorkspace,
+    setPreviewTheme,
+    setAutoSave,
     openTab,
     closeTab,
     togglePinTab,

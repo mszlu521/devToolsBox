@@ -29,6 +29,8 @@
     "@vue/tsconfig": "^0.5.0",
     "electron": "^40.8.0",
     "electron-builder": "^24.9.0",
+    "pngjs": "^7.0.0",
+    "sharp": "^0.34.5",
     "typescript": "~5.8.0",
     "vite": "^5.0.0",
     "vite-plugin-electron": "^0.28.0",
@@ -82,18 +84,35 @@
     },
     "files": [
       "dist/**/*",
-      "dist-electron/**/*"
+      "dist-electron/**/*",
+      "build/icon.png",
+      "build/icon.ico"
     ],
-    "mac": {
-      "category": "public.app-category.utilities"
-    },
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "allowElevation": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "DevToolsBox",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico"
+    },
+    "mac": {
+      "category": "public.app-category.utilities",
+      "icon": "build/icon.png"
     },
     "linux": {
-      "target": "tar.gz",
+      "target": ["tar.gz", "deb", "AppImage"],
       "category": "Development",
-      "maintainer": "DevToolsBox"
+      "maintainer": "DevToolsBox",
+      "icon": "build/icon.png",
+      "synopsis": "开发者工具箱",
+      "description": "让开发更高效的工具集合"
     }
   },
   "pnpm": {

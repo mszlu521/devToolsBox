@@ -5,8 +5,9 @@
 <script setup lang="ts">
 import { useThemeStore } from './stores/themeStore'
 
-// 初始化主题 - 使用 void 操作符来表明我们是故意调用这个函数的
-void useThemeStore()
+// 初始化主题并加载保存的设置
+const themeStore = useThemeStore()
+themeStore.loadTheme()
 </script>
 
 <style>

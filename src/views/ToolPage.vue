@@ -28,7 +28,6 @@ const handleBack = () => {
 }
 
 const currentComponent = computed(() => {
-  console.log('currentToolId:', toolStore.currentToolId)
   switch (toolStore.currentToolId) {
     case 'env-manager':
       return EnvManager

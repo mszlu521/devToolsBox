@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, shell, nativeTheme, protocol } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, shell, nativeTheme, protocol, Tray, Menu } from 'electron'
 import { join } from 'path'
 import { exec } from 'child_process'
 import { promisify } from 'util'
@@ -11,6 +11,52 @@ const execAsync = promisify(exec)
 const isDev = process.env.NODE_ENV === 'development'
 
 let mainWindow: BrowserWindow | null = null
+let tray: Tray | null = null
+
+// 关闭行为设置：'tray' | 'close'
+let closeToTray = true
+let isQuiting = false
+
+// ========== 应用配置持久化 ==========
+
+// 应用配置存储路径 - ~/.devToolsBox/settings.json
+const getAppSettingsPath = () => {
+  const homePath = app.getPath('home')
+  const dataDir = join(homePath, '.devToolsBox')
+  
+  if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true })
+  }
+  
+  return join(dataDir, 'settings.json')
+}
+
+// 读取应用配置
+ipcMain.handle('get-app-settings', async () => {
+  try {
+    const settingsPath = getAppSettingsPath()
+    if (fs.existsSync(settingsPath)) {
+      const data = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'))
+      return { success: true, data }
+    }
+    return { success: true, data: {} }
+  } catch (error: any) {
+    console.error('读取应用配置失败:', error)
+    return { success: false, error: error.message, data: {} }
+  }
+})
+
+// 保存应用配置
+ipcMain.handle('save-app-settings', async (_event, data: any) => {
+  try {
+    const settingsPath = getAppSettingsPath()
+    fs.writeFileSync(settingsPath, JSON.stringify(data, null, 2), 'utf-8')
+    return { success: true }
+  } catch (error: any) {
+    console.error('保存应用配置失败:', error)
+    return { success: false, error: error.message }
+  }
+})
 
 // 数据存储路径 - 使用用户目录下的 .devToolsBox 文件夹，按工具分子目录存储
 const getDataPath = () => {
@@ -234,11 +280,59 @@ function createWindow() {
     mainWindow.loadURL('http://localhost:5173')
     mainWindow.webContents.openDevTools()
   } else {
-    mainWindow.loadFile(join(__dirname, '../index.html'))
+    // 尝试多个可能的路径
+    const possiblePaths = [
+      join(__dirname, '../dist/index.html'),
+      join(__dirname, './dist/index.html'),
+      join(process.resourcesPath, 'app/dist/index.html'),
+      join(__dirname, '../index.html'),
+      join(__dirname, 'index.html'),
+    ]
+    
+    let loaded = false
+    for (const htmlPath of possiblePaths) {
+      if (fs.existsSync(htmlPath)) {
+        mainWindow.loadFile(htmlPath)
+        loaded = true
+        break
+      }
+    }
+    
+    if (!loaded) {
+      console.error('Could not find index.html. Tried paths:', possiblePaths)
+      console.error('__dirname:', __dirname)
+      console.error('resourcesPath:', process.resourcesPath)
+      // 显示错误页面
+      mainWindow.loadURL(`data:text/html,
+        <h1>Error: Could not find index.html</h1>
+        <p>__dirname: ${__dirname}</p>
+        <p>resourcesPath: ${process.resourcesPath}</p>
+      `)
+    }
   }
 
   mainWindow.once('ready-to-show', () => {
     mainWindow?.show()
+  })
+
+  // 调试：捕获加载失败
+  mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription) => {
+    console.error('页面加载失败:', errorCode, errorDescription)
+    if (mainWindow) {
+      mainWindow.loadFile(join(__dirname, '../dist/index.html'))
+    }
+  })
+
+  // 调试：捕获控制台错误
+  mainWindow.webContents.on('console-message', (_event, level, message) => {
+  })
+
+  // 窗口关闭事件 - 根据设置决定是退出还是最小化到托盘
+  mainWindow.on('close', (event) => {
+    if (closeToTray && !isQuiting) {
+      event.preventDefault()
+      mainWindow?.hide()
+    }
   })
 
   mainWindow.on('closed', () => {
@@ -246,7 +340,137 @@ function createWindow() {
   })
 }
 
-app.whenReady().then(() => {
+// 创建托盘图标和菜单
+function createTray() {
+  // 尝试多个可能的路径来找到图标
+  const possibleIconPaths = [
+    // 开发环境
+    join(__dirname, '../build/icon.png'),
+    // 打包后的路径
+    join(process.resourcesPath, 'build/icon.png'),
+    join(process.resourcesPath, 'app/build/icon.png'),
+    join(__dirname, '../../build/icon.png'),
+    join(__dirname, '../../../build/icon.png'),
+  ]
+  
+  let trayIcon: string | undefined
+  for (const iconPath of possibleIconPaths) {
+    if (fs.existsSync(iconPath)) {
+      trayIcon = iconPath
+      console.log('[Tray] 使用图标:', iconPath)
+      break
+    }
+  }
+  
+  if (!trayIcon) {
+    console.warn('[Tray] 警告: 找不到图标文件，尝试使用默认路径')
+    trayIcon = join(__dirname, '../build/icon.png')
+  }
+  
+  try {
+    tray = new Tray(trayIcon)
+  } catch (error) {
+    console.error('[Tray] 创建托盘图标失败:', error)
+    // 如果创建失败，不创建托盘
+    return
+  }
+  
+  const contextMenu = Menu.buildFromTemplate([
+    {
+      label: '显示窗口',
+      click: () => {
+        if (mainWindow) {
+          mainWindow.show()
+          mainWindow.focus()
+        } else {
+          createWindow()
+        }
+      }
+    },
+    {
+      label: '关闭行为',
+      submenu: [
+        {
+          label: '最小化到托盘',
+          type: 'radio',
+          checked: closeToTray,
+          click: () => {
+            closeToTray = true
+            saveCloseBehavior()
+          }
+        },
+        {
+          label: '直接退出',
+          type: 'radio',
+          checked: !closeToTray,
+          click: () => {
+            closeToTray = false
+            saveCloseBehavior()
+          }
+        }
+      ]
+    },
+    { type: 'separator' },
+    {
+      label: '退出',
+      click: () => {
+        isQuiting = true
+        app.quit()
+      }
+    }
+  ])
+  
+  tray.setToolTip('DevToolsBox - 开发者工具箱')
+  tray.setContextMenu(contextMenu)
+  
+  // 单击托盘图标显示/隐藏窗口
+  tray.on('click', () => {
+    if (mainWindow) {
+      if (mainWindow.isVisible()) {
+        mainWindow.hide()
+      } else {
+        mainWindow.show()
+        mainWindow.focus()
+      }
+    } else {
+      createWindow()
+    }
+  })
+}
+
+// 保存关闭行为设置
+async function saveCloseBehavior() {
+  try {
+    const settingsPath = getAppSettingsPath()
+    let settings = {}
+    if (fs.existsSync(settingsPath)) {
+      settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'))
+    }
+    settings = { ...settings, closeBehavior: closeToTray ? 'tray' : 'close' }
+    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf-8')
+  } catch (error) {
+    console.error('保存关闭行为设置失败:', error)
+  }
+}
+
+// 加载关闭行为设置
+async function loadCloseBehavior() {
+  try {
+    const settingsPath = getAppSettingsPath()
+    if (fs.existsSync(settingsPath)) {
+      const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'))
+      closeToTray = settings.closeBehavior !== 'close'
+    }
+  } catch (error) {
+    console.error('加载关闭行为设置失败:', error)
+    closeToTray = true // 默认最小化到托盘
+  }
+}
+
+app.whenReady().then(async () => {
+  // 加载关闭行为设置
+  await loadCloseBehavior()
+  
   // 注册自定义协议用于本地图片加载
   protocol.registerFileProtocol('mdimage', (request, callback) => {
     const url = request.url.replace('mdimage://', '')
@@ -270,6 +494,7 @@ app.whenReady().then(() => {
   }
   
   createWindow()
+  createTray()
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -291,6 +516,22 @@ ipcMain.handle('get-data', async () => {
 
 ipcMain.handle('save-data', async (_event, data: EnvData) => {
   return writeData(data)
+})
+
+// 更新关闭行为设置（供前端调用）
+ipcMain.handle('update-close-behavior', async (_event, behavior: 'tray' | 'close') => {
+  closeToTray = behavior === 'tray'
+  await saveCloseBehavior()
+  // 更新托盘菜单
+  if (tray) {
+    createTray()
+  }
+  return { success: true }
+})
+
+// 获取关闭行为设置
+ipcMain.handle('get-close-behavior', async () => {
+  return { behavior: closeToTray ? 'tray' : 'close' }
 })
 
 ipcMain.handle('get-system-env', async () => {
@@ -523,7 +764,6 @@ ipcMain.handle('fetch-remote-hosts', async (_event, url: string, useProxy?: bool
     if (useProxy && proxyUrl) {
       // 这里可以使用 node-fetch 的代理支持，或 electron 的 net 模块
       // 简化实现，实际项目中可以使用 https-proxy-agent
-      console.log(`使用代理: ${proxyUrl}`)
     }
     
     const response = await fetch(url, fetchOptions)
@@ -1001,7 +1241,7 @@ ipcMain.handle('tcp-connect', async (_event, host: string, port: number, timeout
 // 待办事项存储路径
 const getTodoDataPath = () => {
   const homePath = app.getPath('home')
-  const dataDir = join(homePath, '.devToolsBox', 'todo-list')
+  const dataDir = join(homePath, '.devToolsBox', '.todo-list')
   
   if (!fs.existsSync(dataDir)) {
     fs.mkdirSync(dataDir, { recursive: true })
@@ -1040,6 +1280,47 @@ ipcMain.handle('save-todo-data', async (_event, data: { todos: any[], projects: 
     return { success: true }
   } catch (error: any) {
     console.error('保存待办数据失败:', error)
+    return { success: false, error: error.message }
+  }
+})
+
+// ========== Markdown 笔记设置持久化 ==========
+
+// Markdown 笔记存储路径
+const getMdNotesDataPath = () => {
+  const homePath = app.getPath('home')
+  const dataDir = join(homePath, '.devToolsBox', '.mdTool')
+  
+  if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true })
+  }
+  
+  return join(dataDir, 'settings.json')
+}
+
+// 读取 Markdown 笔记设置
+ipcMain.handle('get-md-notes-data', async () => {
+  try {
+    const dataPath = getMdNotesDataPath()
+    if (fs.existsSync(dataPath)) {
+      const data = JSON.parse(fs.readFileSync(dataPath, 'utf-8'))
+      return { success: true, data }
+    }
+    return { success: true, data: {} }
+  } catch (error: any) {
+    console.error('读取 Markdown 笔记数据失败:', error)
+    return { success: false, error: error.message, data: {} }
+  }
+})
+
+// 保存 Markdown 笔记设置
+ipcMain.handle('save-md-notes-data', async (_event, data: any) => {
+  try {
+    const dataPath = getMdNotesDataPath()
+    fs.writeFileSync(dataPath, JSON.stringify(data, null, 2), 'utf-8')
+    return { success: true }
+  } catch (error: any) {
+    console.error('保存 Markdown 笔记数据失败:', error)
     return { success: false, error: error.message }
   }
 })

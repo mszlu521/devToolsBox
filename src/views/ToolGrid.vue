@@ -1,13 +1,42 @@
 <script setup lang="ts">
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useToolStore } from '../stores/toolStore'
 import { useThemeStore } from '../stores/themeStore'
-import { Sunny, Moon, EditPen } from '@element-plus/icons-vue'
+import { Sunny, Moon, EditPen, Setting, Minus, Close, Tools } from '@element-plus/icons-vue'
 import * as ElementPlusIconsVue from '@element-plus/icons-vue'
 
 const router = useRouter()
 const toolStore = useToolStore()
 const themeStore = useThemeStore()
+
+// 关闭行为设置
+const closeBehavior = ref<'tray' | 'close'>('tray')
+const showSettings = ref(false)
+
+// 加载关闭行为设置
+const loadCloseBehavior = async () => {
+  try {
+    const result = await window.electronAPI.getCloseBehavior()
+    closeBehavior.value = result.behavior
+  } catch (e) {
+    console.error('加载关闭行为设置失败:', e)
+  }
+}
+
+// 更新关闭行为
+const updateCloseBehavior = async (behavior: 'tray' | 'close') => {
+  try {
+    await window.electronAPI.updateCloseBehavior(behavior)
+    closeBehavior.value = behavior
+  } catch (e) {
+    console.error('更新关闭行为设置失败:', e)
+  }
+}
+
+onMounted(() => {
+  loadCloseBehavior()
+})
 
 const getIcon = (iconName: string) => {
   // 优先使用已导入的图标
@@ -56,7 +85,7 @@ const openLink = (url: string) => {
         </div>
       </div>
       <p class="subtitle">开发者工具箱 - 让开发更高效</p>
-      <!-- 主题切换按钮 -->
+      <!-- 主题切换和设置按钮 -->
       <div class="theme-toggle">
         <el-button
           circle
@@ -68,6 +97,14 @@ const openLink = (url: string) => {
             <Sunny v-if="themeStore.theme === 'dark'" />
             <Moon v-else />
           </el-icon>
+        </el-button>
+        <el-button
+          circle
+          class="theme-btn"
+          @click="showSettings = true"
+          title="设置"
+        >
+          <el-icon :size="20"><Setting /></el-icon>
         </el-button>
       </div>
     </div>
@@ -112,6 +149,51 @@ const openLink = (url: string) => {
         <span>DevToolsBox v1.0.0</span>
       </div>
     </div>
+    
+    <!-- 设置对话框 -->
+    <el-dialog
+      v-model="showSettings"
+      title="应用设置"
+      width="420px"
+      align-center
+      :close-on-click-modal="true"
+      class="settings-dialog"
+    >
+      <div class="settings-content">
+        <div class="setting-card">
+          <div class="setting-header">
+            <el-icon :size="20" color="#00d4aa"><Tools /></el-icon>
+            <span>窗口行为</span>
+          </div>
+          <div class="setting-body">
+            <div class="setting-option" 
+                 :class="{ active: closeBehavior === 'tray' }"
+                 @click="updateCloseBehavior('tray')">
+              <div class="option-icon">
+                <el-icon :size="24"><Minus /></el-icon>
+              </div>
+              <div class="option-info">
+                <div class="option-title">最小化到托盘</div>
+                <div class="option-desc">点击关闭按钮时最小化到系统托盘</div>
+              </div>
+              <el-radio v-model="closeBehavior" label="tray" />
+            </div>
+            <div class="setting-option" 
+                 :class="{ active: closeBehavior === 'close' }"
+                 @click="updateCloseBehavior('close')">
+              <div class="option-icon">
+                <el-icon :size="24"><Close /></el-icon>
+              </div>
+              <div class="option-info">
+                <div class="option-title">直接退出</div>
+                <div class="option-desc">点击关闭按钮时直接退出应用</div>
+              </div>
+              <el-radio v-model="closeBehavior" label="close" />
+            </div>
+          </div>
+        </div>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -134,6 +216,8 @@ const openLink = (url: string) => {
   position: absolute;
   top: 0;
   right: 0;
+  display: flex;
+  gap: 8px;
 }
 
 .theme-btn {
@@ -342,5 +426,152 @@ const openLink = (url: string) => {
 
 .divider {
   opacity: 0.3;
+}
+
+/* 设置对话框样式 - 与页面主题一致 */
+:deep(.settings-dialog) {
+  background: transparent;
+}
+
+:deep(.settings-dialog .el-dialog) {
+  background: #1a1a2e;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 16px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+}
+
+:deep(.settings-dialog .el-dialog__header) {
+  padding: 20px 24px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  margin: 0;
+}
+
+:deep(.settings-dialog .el-dialog__title) {
+  color: #fff;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+:deep(.settings-dialog .el-dialog__headerbtn) {
+  top: 20px;
+  right: 20px;
+}
+
+:deep(.settings-dialog .el-dialog__headerbtn .el-icon) {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+:deep(.settings-dialog .el-dialog__headerbtn:hover .el-icon) {
+  color: #fff;
+}
+
+:deep(.settings-dialog .el-dialog__body) {
+  padding: 0;
+}
+
+:deep(.settings-dialog .el-dialog__footer) {
+  display: none;
+}
+
+.settings-content {
+  padding: 20px 24px 24px;
+}
+
+.setting-card {
+  background: #141428;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.setting-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 20px;
+  background: rgba(0, 212, 170, 0.08);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.setting-header span {
+  color: #fff;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.setting-body {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.setting-option {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  background: #1a1a2e;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.setting-option:hover {
+  background: #202038;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.setting-option.active {
+  background: rgba(0, 212, 170, 0.1);
+  border-color: #00d4aa;
+}
+
+.option-icon {
+  width: 44px;
+  height: 44px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.7);
+  transition: all 0.3s ease;
+}
+
+.setting-option.active .option-icon {
+  background: rgba(0, 212, 170, 0.15);
+  color: #00d4aa;
+}
+
+.option-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.option-title {
+  font-size: 15px;
+  font-weight: 500;
+  color: #fff;
+  margin-bottom: 4px;
+}
+
+.option-desc {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.setting-option :deep(.el-radio) {
+  margin: 0;
+}
+
+.setting-option :deep(.el-radio__label) {
+  display: none;
+}
+
+.setting-option :deep(.el-radio__input.is-checked .el-radio__inner) {
+  border-color: #00d4aa;
+  background: #00d4aa;
 }
 </style>

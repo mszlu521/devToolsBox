@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
+import { ref, onMounted, onBeforeUnmount, watch, computed } from 'vue'
 import { useMdStore } from '../../stores/mdStore'
+import { useThemeStore } from '../../stores/themeStore'
 import { useFileManager } from '../../composables/useFileManager'
 import { generateWechatHtmlForPreview, generateWechatHtml, copyHtmlToClipboard } from '../../composables/useMarkdownRenderer'
 import FileTree from '../markdown/FileTree.vue'
@@ -13,19 +14,53 @@ import {
 import { ElMessage } from 'element-plus'
 
 const mdStore = useMdStore()
+const themeStore = useThemeStore()
 const { fileTree, isLoading, loadWorkspace, toggleFolder, readFile, saveFile: saveFileContent } = useFileManager()
 
 // ==================== 状态 ====================
 
-const workspacePath = ref('')
+// 工作区路径 - 使用 store 的方法进行设置
+const workspacePath = computed(() => mdStore.workspacePath)
 const selectedFile = ref('')
 const fileContent = ref('')
 const fileInfo = ref<{ size: number; modifiedTime: number; lineCount: number } | null>(null)
 const fileLoading = ref(false)  // 文件打开加载状态
 
-// 编辑器设置
-const autoSave = ref(true)
-const previewTheme = ref<PreviewTheme>('default')
+// 编辑器设置 - 使用 store 中的值
+const autoSave = computed({
+  get: () => mdStore.autoSave,
+  set: (val) => mdStore.setAutoSave(val)
+})
+const previewTheme = computed<PreviewTheme>({
+  get: () => mdStore.previewTheme as PreviewTheme,
+  set: (val) => mdStore.setPreviewTheme(val)
+})
+
+// 监听应用主题变化，自动同步编辑器主题到对应的基础主题
+// 但只同步一次（初始加载时），之后用户可以手动选择
+const syncThemeFromApp = () => {
+  const appTheme = themeStore.theme
+  // 根据应用主题选择对应的编辑器基础主题
+  // 直接修改 store 的 ref，不触发保存
+  if (appTheme === 'dark') {
+    // 如果当前是明亮主题，切换到暗黑主题
+    const lightThemes = ['default', 'github', 'notion', 'medium', 'wechat', 'paper']
+    if (lightThemes.includes(mdStore.previewTheme)) {
+      mdStore.previewTheme = 'dark'
+    }
+  } else {
+    // 如果当前是暗黑主题，切换到明亮主题
+    const darkThemes = ['dark', 'midnight', 'dracula']
+    if (darkThemes.includes(mdStore.previewTheme)) {
+      mdStore.previewTheme = 'default'
+    }
+  }
+}
+
+// 监听应用主题变化，实时同步（但只在数据加载完成后）
+watch(() => themeStore.theme, () => {
+  syncThemeFromApp()
+})
 
 // 编辑器引用
 const editorRef = ref<InstanceType<typeof TyporaEditorTipTap>>()
@@ -99,21 +134,18 @@ watch(fileContent, () => {
 
 // ==================== 初始化 ====================
 
-onMounted(() => {
-  mdStore.loadData()
-  workspacePath.value = mdStore.workspacePath
-  if (workspacePath.value) {
-    loadWorkspace(workspacePath.value)
+onMounted(async () => {
+  // 从文件系统加载 store 数据
+  await mdStore.loadData()
+
+  // 如果 store 中有保存的工作区路径，自动加载
+  if (mdStore.workspacePath) {
+    await loadWorkspace(mdStore.workspacePath)
   }
 
-  // 加载设置
-  const saved = localStorage.getItem('md-editor-settings-v2')
-  if (saved) {
-    const s = JSON.parse(saved)
-    autoSave.value = s.autoSave ?? true
-    previewTheme.value = s.previewTheme ?? 'default'
-  }
-  
+  // 同步应用主题
+  syncThemeFromApp()
+
   // 注册 Ctrl+S 快捷键
   document.addEventListener('keydown', handleKeyDown)
 })
@@ -148,13 +180,10 @@ const handleKeyDown = (e: KeyboardEvent) => {
 // ==================== 方法 ====================
 
 /**
- * 保存设置到本地存储
+ * 保存设置 - 现在通过 store 自动保存到文件系统
  */
 const saveSettings = () => {
-  localStorage.setItem('md-editor-settings-v2', JSON.stringify({
-    autoSave: autoSave.value,
-    previewTheme: previewTheme.value
-  }))
+  // 不需要手动保存，computed setter 会自动调用 store.saveData()
 }
 
 // 主题选项 - 恢复所有原有主题
@@ -187,8 +216,7 @@ const selectWorkspace = async () => {
   try {
     const result = await window.electronAPI.showOpenDialog({ properties: ['openDirectory'] })
     if (!result.canceled && result.filePaths.length > 0) {
-      workspacePath.value = result.filePaths[0]
-      mdStore.setWorkspace(workspacePath.value)
+      await mdStore.setWorkspace(result.filePaths[0])
       await loadWorkspace(workspacePath.value)
       ElMessage.success('工作区已打开')
     }
@@ -238,7 +266,7 @@ const openFile = async (filePath: string) => {
 
     // 添加到最近打开
     const fileName = filePath.split('\\').pop() || ''
-    mdStore.addToRecent({
+    await mdStore.addToRecent({
       path: filePath,
       name: fileName,
       isDirectory: false,
@@ -338,7 +366,7 @@ const saveFile = async (isManual = true) => {
  * 生成公众号内容（预览使用 CSS 类样式）
  */
 const generateWechatContent = () => {
-  const html = generateWechatHtmlForPreview(fileContent.value, selectedFile.value, 'default')
+  const html = generateWechatHtmlForPreview(fileContent.value, selectedFile.value, previewTheme.value)
   wechatContent.value = html
   showWechatDialog.value = true
 }
@@ -348,7 +376,7 @@ const generateWechatContent = () => {
  */
 const copyWechatContent = async () => {
   // 生成带内联样式的 HTML 用于复制
-  const inlineHtml = generateWechatHtml(fileContent.value, selectedFile.value, 'default')
+  const inlineHtml = generateWechatHtml(fileContent.value, selectedFile.value, previewTheme.value)
   const success = await copyHtmlToClipboard(inlineHtml)
   if (success) {
     ElMessage.success('已复制到剪贴板，可直接粘贴到公众号编辑器')

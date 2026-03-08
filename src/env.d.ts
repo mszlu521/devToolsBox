@@ -8,6 +8,14 @@ declare module '*.vue' {
 
 interface Window {
   electronAPI: {
+    // 应用配置
+    getAppSettings: () => Promise<{ success: boolean; data: any; error?: string }>
+    saveAppSettings: (data: any) => Promise<{ success: boolean; error?: string }>
+    
+    // 关闭行为设置
+    getCloseBehavior: () => Promise<{ behavior: 'tray' | 'close' }>
+    updateCloseBehavior: (behavior: 'tray' | 'close') => Promise<{ success: boolean }>
+    
     getData: () => Promise<EnvData>
     saveData: (data: EnvData) => Promise<boolean>
     getSystemEnv: () => Promise<EnvVariable[]>
@@ -48,6 +56,14 @@ interface Window {
     getIpInfo: () => Promise<{ success: boolean; localIp: string; publicIp: string; location: string; error?: string }>
     pingHost: (host: string, count?: number) => Promise<{ success: boolean; results: { host: string; time: number; success: boolean }[]; avgTime: number; lossRate: number; error?: string }>
     tcpConnect: (host: string, port: number, timeout?: number) => Promise<{ success: boolean; connected: boolean; time: number; error?: string }>
+    
+    // 待办事项数据
+    getTodoData: () => Promise<{ success: boolean; data: { todos: any[], projects: any[], categories: any[] }; error?: string }>
+    saveTodoData: (data: { todos: any[], projects: any[], categories?: any[] }) => Promise<{ success: boolean; error?: string }>
+    
+    // Markdown 笔记设置持久化
+    getMdNotesData: () => Promise<{ success: boolean; data: any; error?: string }>
+    saveMdNotesData: (data: any) => Promise<{ success: boolean; error?: string }>
     
     // Markdown 笔记文件管理
     mdReadDirectory: (dirPath: string) => Promise<{ success: boolean; data?: any[]; error?: string }>

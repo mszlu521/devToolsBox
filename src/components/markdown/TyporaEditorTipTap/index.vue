@@ -451,8 +451,6 @@ onMounted(() => {
     onUpdate: ({ editor: e }) => {
       // 使用 tiptap-markdown 获取 Markdown 内容
       let markdown = (e.storage as any).markdown?.getMarkdown() || ''
-      console.log('=== onUpdate: raw markdown from tiptap-markdown ===')
-      console.log(JSON.stringify(markdown))
       
       // 处理图片路径：将 mdimage:// 还原为相对路径
       markdown = markdown.replace(/!\[([^\]]*)\]\((mdimage:\/\/[^)]+)\)/g, (match: string, alt: string, src: string) => {
@@ -475,9 +473,6 @@ onMounted(() => {
       const beforeFix = markdown
       // 匹配图片后直接跟着非换行字符的情况，添加换行符
       markdown = markdown.replace(/(!\[[^\]]*\]\([^)]+\))(?=[^\n])/g, '$1\n')
-      console.log('=== after fix ===')
-      console.log('Changed:', beforeFix !== markdown)
-      console.log(JSON.stringify(markdown))
       
       emit('update:modelValue', markdown)
       emit('change', markdown)
