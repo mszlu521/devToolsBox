@@ -1,13 +1,12 @@
 <script setup lang="ts">
-import { ref, computed, nextTick, watch } from 'vue'
+import { ref, computed, nextTick, watch, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
-  Reading, DocumentChecked, CopyDocument,
+  Reading, DocumentChecked,
   Document as SourceCodeIcon
 } from '@element-plus/icons-vue'
 import { useMdEditor } from './useMdEditor'
 import type { EditorMode, PreviewTheme, OutlineItem, MdEditorProps } from './types'
-import 'highlight.js/styles/atom-one-dark.css'
 
 // ==================== Props & Emits ====================
 
@@ -26,7 +25,7 @@ const emit = defineEmits<{
   (e: 'update:modelValue', value: string): void
   (e: 'update:mode', mode: EditorMode): void
   (e: 'update:theme', theme: PreviewTheme): void
-  (e: 'save'): void
+  (e: 'save', isManual?: boolean): void
   (e: 'change', value: string): void
   (e: 'scrollToHeading', item: OutlineItem): void
 }>()
@@ -63,6 +62,7 @@ const {
   handleWysiwygInput,
   handleWysiwygKeydown,
   handleWysiwygPaste,
+  triggerSave,
   scrollToLine
 } = useMdEditor({
   content,
@@ -76,9 +76,6 @@ const {
 
 // ==================== 方法 ====================
 
-/**
- * 处理模式切换
- */
 const handleModeChange = (mode: EditorMode) => {
   editorMode.value = mode
   if (mode === 'wysiwyg') {
@@ -88,24 +85,18 @@ const handleModeChange = (mode: EditorMode) => {
   }
 }
 
-/**
- * 处理保存
- */
 const handleSave = () => {
-  emit('save')
+  triggerSave()
+  emit('save', true)
 }
 
-/**
- * 处理大纲项点击
- */
 const handleOutlineClick = (item: OutlineItem) => {
   emit('scrollToHeading', item)
   scrollToLine(item.line)
 }
 
-/**
- * 暴露给父组件的方法
- */
+// ==================== 暴露给父组件的方法 ====================
+
 defineExpose({
   focus: () => {
     nextTick(() => {
@@ -132,9 +123,7 @@ defineExpose({
 
 // ==================== 监听 ====================
 
-// 监听文件内容变化（外部传入）
 watch(() => props.modelValue, (newVal, oldVal) => {
-  // 只在内容真正变化且不是内部更新时触发
   if (!state.isUpdating && editorMode.value === 'wysiwyg' && newVal !== oldVal) {
     nextTick(() => {
       updateWysiwygContent()
@@ -142,13 +131,16 @@ watch(() => props.modelValue, (newVal, oldVal) => {
   }
 }, { immediate: true })
 
-// 监听文件路径变化（打开新文件时）
 watch(() => props.filePath, (newPath) => {
   if (newPath && editorMode.value === 'wysiwyg') {
     nextTick(() => {
       updateWysiwygContent()
     })
   }
+})
+
+onUnmounted(() => {
+  triggerSave()
 })
 </script>
 
@@ -230,6 +222,7 @@ watch(() => props.filePath, (newPath) => {
           v-show="editorMode === 'wysiwyg'"
           ref="wysiwygEditorRef"
           class="wysiwyg-editor"
+          :style="currentThemeStyle"
           :contenteditable="!disabled"
           @input="handleWysiwygInput"
           @keydown="handleWysiwygKeydown"
@@ -325,7 +318,7 @@ watch(() => props.filePath, (newPath) => {
   position: relative;
 }
 
-/* WYSIWYG 编辑器 - 现代化样式 */
+/* WYSIWYG 编辑器 */
 .wysiwyg-editor {
   width: 100%;
   height: 100%;
@@ -348,25 +341,7 @@ watch(() => props.filePath, (newPath) => {
   font-size: 1.1rem;
 }
 
-/* 滚动条样式 */
-.wysiwyg-editor::-webkit-scrollbar {
-  width: 8px;
-}
-
-.wysiwyg-editor::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.wysiwyg-editor::-webkit-scrollbar-thumb {
-  background: var(--theme-border, var(--border-color));
-  border-radius: 4px;
-}
-
-.wysiwyg-editor::-webkit-scrollbar-thumb:hover {
-  background: var(--theme-primary, var(--primary-color));
-}
-
-/* 源码编辑器 - 增强样式 */
+/* 源码编辑器 */
 .source-editor {
   width: 100%;
   height: 100%;
@@ -382,25 +357,7 @@ watch(() => props.filePath, (newPath) => {
   tab-size: 2;
 }
 
-.source-editor::placeholder {
-  color: var(--text-secondary);
-  opacity: 0.5;
-}
-
-.source-editor::-webkit-scrollbar {
-  width: 8px;
-}
-
-.source-editor::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.source-editor::-webkit-scrollbar-thumb {
-  background: var(--theme-border, var(--border-color));
-  border-radius: 4px;
-}
-
-/* 大纲侧边栏 - 现代卡片风格 */
+/* 大纲侧边栏 */
 .outline-sidebar {
   width: 240px;
   background: var(--bg-primary);
@@ -464,131 +421,4 @@ watch(() => props.filePath, (newPath) => {
 .outline-item.level-4 { padding-left: 48px; font-size: 12px; }
 .outline-item.level-5 { padding-left: 60px; font-size: 11px; }
 .outline-item.level-6 { padding-left: 72px; font-size: 11px; }
-
-/* 编辑器聚焦效果 */
-.wysiwyg-editor:focus {
-  box-shadow: inset 0 0 0 2px var(--theme-primary, var(--primary-color))20;
-}
-</style>
-
-<!-- 全局高对比度代码高亮样式 -->
-<style>
-/* 强制高对比度 - 覆盖 highlight.js 默认样式 */
-.wysiwyg-editor pre code.hljs {
-  background: #1e1e2e !important;
-  color: #f8f8f2 !important;
-}
-
-.wysiwyg-editor .hljs-keyword,
-.wysiwyg-editor .hljs-selector-tag,
-.wysiwyg-editor .hljs-literal,
-.wysiwyg-editor .hljs-section,
-.wysiwyg-editor .hljs-link {
-  color: #ff79c6 !important;
-  font-weight: 600 !important;
-}
-
-.wysiwyg-editor .hljs-string,
-.wysiwyg-editor .hljs-title,
-.wysiwyg-editor .hljs-name,
-.wysiwyg-editor .hljs-type,
-.wysiwyg-editor .hljs-attribute,
-.wysiwyg-editor .hljs-symbol,
-.wysiwyg-editor .hljs-bullet,
-.wysiwyg-editor .hljs-addition,
-.wysiwyg-editor .hljs-variable,
-.wysiwyg-editor .hljs-template-tag,
-.wysiwyg-editor .hljs-template-variable {
-  color: #f1fa8c !important;
-}
-
-.wysiwyg-editor .hljs-comment,
-.wysiwyg-editor .hljs-quote,
-.wysiwyg-editor .hljs-deletion,
-.wysiwyg-editor .hljs-meta {
-  color: #6272a4 !important;
-  font-style: italic !important;
-}
-
-.wysiwyg-editor .hljs-number,
-.wysiwyg-editor .hljs-regexp,
-.wysiwyg-editor .hljs-literal,
-.wysiwyg-editor .hljs-params,
-.wysiwyg-editor .hljs-constant {
-  color: #bd93f9 !important;
-  font-weight: 600 !important;
-}
-
-.wysiwyg-editor .hljs-class .hljs-title,
-.wysiwyg-editor .hljs-function .hljs-title {
-  color: #50fa7b !important;
-  font-weight: 600 !important;
-}
-
-.wysiwyg-editor .hljs-tag,
-.wysiwyg-editor .hljs-tag .hljs-name {
-  color: #ff79c6 !important;
-}
-
-.wysiwyg-editor .hljs-tag .hljs-attr {
-  color: #50fa7b !important;
-}
-
-.wysiwyg-editor .hljs-tag .hljs-string {
-  color: #f1fa8c !important;
-}
-
-.wysiwyg-editor .hljs-built_in,
-.wysiwyg-editor .hljs-builtin-name {
-  color: #8be9fd !important;
-  font-weight: 600 !important;
-}
-
-.wysiwyg-editor .hljs-operator,
-.wysiwyg-editor .hljs-punctuation {
-  color: #ff79c6 !important;
-}
-
-.wysiwyg-editor .hljs-property {
-  color: #8be9fd !important;
-}
-
-/* 代码块 Mac 窗口风格 */
-.wysiwyg-editor pre {
-  background: #1e1e2e !important;
-  border-radius: 12px !important;
-  border: 1px solid rgba(255,255,255,0.08) !important;
-}
-
-.wysiwyg-editor pre::before {
-  content: '● ● ●';
-  display: block;
-  padding: 0.75rem 1rem;
-  font-size: 0.75rem;
-  color: #ff5f56;
-  letter-spacing: 0.25em;
-  background: linear-gradient(180deg, #2d2d3a 0%, #252532 100%);
-  border-bottom: 1px solid rgba(255,255,255,0.08);
-  border-radius: 12px 12px 0 0;
-  font-family: system-ui, sans-serif;
-  text-shadow: 0 0 2px rgba(255,95,86,0.5);
-}
-
-.wysiwyg-editor pre code {
-  display: block;
-  padding: 1.25rem;
-  font-size: 0.9rem;
-  line-height: 1.8;
-  overflow-x: auto;
-}
-
-/* 行内代码 */
-.wysiwyg-editor code:not(pre code) {
-  background: rgba(255,255,255,0.12) !important;
-  color: #22d3ee !important;
-  padding: 0.25rem 0.5rem !important;
-  border-radius: 6px !important;
-  font-weight: 600 !important;
-  border: 1px solid rgba(255,255,255,0.15) !important;
-}
 </style>

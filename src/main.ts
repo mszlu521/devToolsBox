@@ -5,6 +5,8 @@ import { ClickOutside } from 'element-plus'
 import * as ElementPlusIconsVue from '@element-plus/icons-vue'
 import 'element-plus/dist/index.css'
 import 'element-plus/theme-chalk/dark/css-vars.css'
+// 导入代码高亮样式
+import 'highlight.js/styles/atom-one-dark.min.css'
 import App from './App.vue'
 import router from './router'
 

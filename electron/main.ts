@@ -1,4 +1,4 @@
-import electron from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, shell, nativeTheme, protocol } from 'electron'
 import { join } from 'path'
 import { exec } from 'child_process'
 import { promisify } from 'util'
@@ -10,11 +10,11 @@ const execAsync = promisify(exec)
 
 const isDev = process.env.NODE_ENV === 'development'
 
-let mainWindow: electron.BrowserWindow | null = null
+let mainWindow: BrowserWindow | null = null
 
 // 数据存储路径 - 使用用户目录下的 .devToolsBox 文件夹，按工具分子目录存储
 const getDataPath = () => {
-  const homePath = electron.app.getPath('home')
+  const homePath = app.getPath('home')
   const dataDir = join(homePath, '.devToolsBox', '.envTool')
   
   // 确保目录存在
@@ -50,7 +50,6 @@ const writeData = (data: EnvData) => {
     return false
   }
 }
-
 // 获取系统环境变量
 const getSystemEnv = async (): Promise<EnvVariable[]> => {
   const platform = os.platform()
@@ -216,7 +215,7 @@ const deleteSystemEnv = async (name: string, isMachine: boolean = false): Promis
 }
 
 function createWindow() {
-  mainWindow = new electron.BrowserWindow({
+  mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
     minWidth: 900,
@@ -247,9 +246,9 @@ function createWindow() {
   })
 }
 
-electron.app.whenReady().then(() => {
+app.whenReady().then(() => {
   // 注册自定义协议用于本地图片加载
-  electron.protocol.registerFileProtocol('mdimage', (request, callback) => {
+  protocol.registerFileProtocol('mdimage', (request, callback) => {
     const url = request.url.replace('mdimage://', '')
     // 解码 URL 编码的路径
     const decodedPath = decodeURIComponent(url)
@@ -267,60 +266,60 @@ electron.app.whenReady().then(() => {
 
   // 移除默认菜单栏
   if (process.platform !== 'darwin') {
-    electron.app.applicationMenu = null
+    app.applicationMenu = null
   }
   
   createWindow()
 
-  electron.app.on('activate', () => {
-    if (electron.BrowserWindow.getAllWindows().length === 0) {
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) {
       createWindow()
     }
   })
 })
 
-electron.app.on('window-all-closed', () => {
+app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
-    electron.app.quit()
+    app.quit()
   }
 })
 
 // IPC 处理程序
-electron.ipcMain.handle('get-data', async () => {
+ipcMain.handle('get-data', async () => {
   return readData()
 })
 
-electron.ipcMain.handle('save-data', async (_event, data: EnvData) => {
+ipcMain.handle('save-data', async (_event, data: EnvData) => {
   return writeData(data)
 })
 
-electron.ipcMain.handle('get-system-env', async () => {
+ipcMain.handle('get-system-env', async () => {
   return await getSystemEnv()
 })
 
-electron.ipcMain.handle('set-system-env', async (_event, name: string, value: string, isMachine?: boolean) => {
+ipcMain.handle('set-system-env', async (_event, name: string, value: string, isMachine?: boolean) => {
   return await setSystemEnv(name, value, isMachine)
 })
 
-electron.ipcMain.handle('delete-system-env', async (_event, name: string, isMachine?: boolean) => {
+ipcMain.handle('delete-system-env', async (_event, name: string, isMachine?: boolean) => {
   return await deleteSystemEnv(name, isMachine)
 })
 
-electron.ipcMain.handle('show-message-box', async (_event, options: Electron.MessageBoxOptions) => {
+ipcMain.handle('show-message-box', async (_event, options: Electron.MessageBoxOptions) => {
   if (!mainWindow) return { response: 0, checkboxChecked: false }
-  return await electron.dialog.showMessageBox(mainWindow, options)
+  return await dialog.showMessageBox(mainWindow, options)
 })
 
-electron.ipcMain.handle('show-error-box', async (_event, title: string, content: string) => {
-  electron.dialog.showErrorBox(title, content)
+ipcMain.handle('show-error-box', async (_event, title: string, content: string) => {
+  dialog.showErrorBox(title, content)
 })
 
-electron.ipcMain.handle('show-open-dialog', async (_event, options: Electron.OpenDialogOptions) => {
+ipcMain.handle('show-open-dialog', async (_event, options: Electron.OpenDialogOptions) => {
   if (!mainWindow) return { canceled: true, filePaths: [] }
-  return await electron.dialog.showOpenDialog(mainWindow, options)
+  return await dialog.showOpenDialog(mainWindow, options)
 })
 
-electron.ipcMain.handle('read-file', async (_event, filePath: string) => {
+ipcMain.handle('read-file', async (_event, filePath: string) => {
   try {
     const content = fs.readFileSync(filePath, 'utf-8')
     return content
@@ -330,10 +329,21 @@ electron.ipcMain.handle('read-file', async (_event, filePath: string) => {
   }
 })
 
+// 打开外部链接
+ipcMain.handle('open-external', async (_event, url: string) => {
+  try {
+    await shell.openExternal(url)
+    return { success: true }
+  } catch (error) {
+    console.error('打开外部链接失败:', error)
+    throw error
+  }
+})
+
 // ==================== Host 管理功能 ====================
 
 const getHostDataPath = () => {
-  const homePath = electron.app.getPath('home')
+  const homePath = app.getPath('home')
   const dataDir = join(homePath, '.devToolsBox', '.hostTool')
   
   if (!fs.existsSync(dataDir)) {
@@ -389,7 +399,7 @@ const createSystemBackupIfNeeded = (): boolean => {
   }
 }
 
-electron.ipcMain.handle('get-host-configs', async () => {
+ipcMain.handle('get-host-configs', async () => {
   try {
     const dataPath = getHostDataPath()
     if (fs.existsSync(dataPath)) {
@@ -402,7 +412,7 @@ electron.ipcMain.handle('get-host-configs', async () => {
   return { configs: [] }
 })
 
-electron.ipcMain.handle('save-host-configs', async (_event, data) => {
+ipcMain.handle('save-host-configs', async (_event, data) => {
   try {
     const dataPath = getHostDataPath()
     fs.writeFileSync(dataPath, JSON.stringify(data, null, 2), 'utf-8')
@@ -413,7 +423,7 @@ electron.ipcMain.handle('save-host-configs', async (_event, data) => {
   }
 })
 
-electron.ipcMain.handle('get-system-hosts', async () => {
+ipcMain.handle('get-system-hosts', async () => {
   try {
     const hostsPath = getHostsFilePath()
     return fs.readFileSync(hostsPath, 'utf-8')
@@ -423,7 +433,7 @@ electron.ipcMain.handle('get-system-hosts', async () => {
   }
 })
 
-electron.ipcMain.handle('activate-host-config', async (_event, content: string) => {
+ipcMain.handle('activate-host-config', async (_event, content: string) => {
   try {
     // 首次启用时创建备份
     createSystemBackupIfNeeded()
@@ -437,7 +447,7 @@ electron.ipcMain.handle('activate-host-config', async (_event, content: string) 
   }
 })
 
-electron.ipcMain.handle('deactivate-host-config', async () => {
+ipcMain.handle('deactivate-host-config', async () => {
   try {
     // 停用所有配置时，恢复到系统备份
     const dataPath = getHostDataPath()
@@ -461,7 +471,7 @@ electron.ipcMain.handle('deactivate-host-config', async () => {
 })
 
 // 从备份恢复
-electron.ipcMain.handle('restore-from-backup', async () => {
+ipcMain.handle('restore-from-backup', async () => {
   try {
     const dataPath = getHostDataPath()
     if (!fs.existsSync(dataPath)) {
@@ -501,7 +511,7 @@ electron.ipcMain.handle('restore-from-backup', async () => {
 })
 
 // 获取远程 hosts 配置
-electron.ipcMain.handle('fetch-remote-hosts', async (_event, url: string, useProxy?: boolean, proxyUrl?: string) => {
+ipcMain.handle('fetch-remote-hosts', async (_event, url: string, useProxy?: boolean, proxyUrl?: string) => {
   try {
     let fetchOptions: any = {
       headers: {
@@ -531,9 +541,9 @@ electron.ipcMain.handle('fetch-remote-hosts', async (_event, url: string, usePro
 })
 
 // 获取备份列表
-electron.ipcMain.handle('get-backup-list', async () => {
+ipcMain.handle('get-backup-list', async () => {
   try {
-    const dataDir = join(electron.app.getPath('home'), '.devToolsBox', '.hostTool')
+    const dataDir = join(app.getPath('home'), '.devToolsBox', '.hostTool')
     const backupDir = join(dataDir, 'backups')
     
     if (!fs.existsSync(backupDir)) {
@@ -560,7 +570,7 @@ electron.ipcMain.handle('get-backup-list', async () => {
 })
 
 // 从指定备份恢复
-electron.ipcMain.handle('restore-from-specific-backup', async (_event, backupPath: string) => {
+ipcMain.handle('restore-from-specific-backup', async (_event, backupPath: string) => {
   try {
     if (!fs.existsSync(backupPath)) {
       return { success: false, message: '备份文件不存在' }
@@ -586,10 +596,10 @@ electron.ipcMain.handle('restore-from-specific-backup', async (_event, backupPat
 })
 
 // 创建 hosts 修改前的备份
-electron.ipcMain.handle('create-hosts-backup', async () => {
+ipcMain.handle('create-hosts-backup', async () => {
   try {
     const hostsPath = getHostsFilePath()
-    const dataDir = join(electron.app.getPath('home'), '.devToolsBox', '.hostTool')
+    const dataDir = join(app.getPath('home'), '.devToolsBox', '.hostTool')
     const backupDir = join(dataDir, 'backups')
     
     // 确保备份目录存在
@@ -634,12 +644,12 @@ electron.ipcMain.handle('create-hosts-backup', async () => {
 })
 
 // 获取数据路径
-electron.ipcMain.handle('get-host-data-path', async () => {
+ipcMain.handle('get-host-data-path', async () => {
   return getHostDataPath()
 })
 
 // 读取备份文件内容
-electron.ipcMain.handle('read-backup-file', async (_event, backupPath: string) => {
+ipcMain.handle('read-backup-file', async (_event, backupPath: string) => {
   try {
     if (!fs.existsSync(backupPath)) {
       return { success: false, content: null, message: '备份文件不存在' }
@@ -681,7 +691,7 @@ import * as net from 'net'
 import * as iconv from 'iconv-lite'
 
 // 检测端口占用
-electron.ipcMain.handle('check-port', async (_event, port: number) => {
+ipcMain.handle('check-port', async (_event, port: number) => {
   try {
     const platform = os.platform()
     let command = ''
@@ -738,7 +748,7 @@ electron.ipcMain.handle('check-port', async (_event, port: number) => {
 })
 
 // 结束进程
-electron.ipcMain.handle('kill-process', async (_event, pid: number) => {
+ipcMain.handle('kill-process', async (_event, pid: number) => {
   try {
     const platform = os.platform()
     if (platform === 'win32') {
@@ -753,7 +763,7 @@ electron.ipcMain.handle('kill-process', async (_event, pid: number) => {
 })
 
 // DNS 查询
-electron.ipcMain.handle('dns-lookup', async (_event, domain: string, type: string, server?: string) => {
+ipcMain.handle('dns-lookup', async (_event, domain: string, type: string, server?: string) => {
   try {
     const records: any[] = []
     
@@ -820,7 +830,7 @@ electron.ipcMain.handle('dns-lookup', async (_event, domain: string, type: strin
 })
 
 // 获取 IP 信息
-electron.ipcMain.handle('get-ip-info', async () => {
+ipcMain.handle('get-ip-info', async () => {
   try {
     // 获取本机 IP
     const interfaces = os.networkInterfaces()
@@ -883,7 +893,7 @@ electron.ipcMain.handle('get-ip-info', async () => {
 })
 
 // Ping 测试 - 使用 ping npm 包
-electron.ipcMain.handle('ping-host', async (_event, host: string, count: number = 4) => {
+ipcMain.handle('ping-host', async (_event, host: string, count: number = 4) => {
   try {
     const platform = os.platform()
     
@@ -959,7 +969,7 @@ electron.ipcMain.handle('ping-host', async (_event, host: string, count: number 
 })
 
 // TCP 连通测试
-electron.ipcMain.handle('tcp-connect', async (_event, host: string, port: number, timeout: number = 5000) => {
+ipcMain.handle('tcp-connect', async (_event, host: string, port: number, timeout: number = 5000) => {
   return new Promise((resolve) => {
     const startTime = Date.now()
     const socket = new net.Socket()
@@ -990,7 +1000,7 @@ electron.ipcMain.handle('tcp-connect', async (_event, host: string, port: number
 
 // 待办事项存储路径
 const getTodoDataPath = () => {
-  const homePath = electron.app.getPath('home')
+  const homePath = app.getPath('home')
   const dataDir = join(homePath, '.devToolsBox', 'todo-list')
   
   if (!fs.existsSync(dataDir)) {
@@ -1003,7 +1013,7 @@ const getTodoDataPath = () => {
 }
 
 // 读取待办事项数据
-electron.ipcMain.handle('get-todo-data', async () => {
+ipcMain.handle('get-todo-data', async () => {
   try {
     const paths = getTodoDataPath()
     const result: { todos: any[], projects: any[], categories: any[] } = { todos: [], projects: [], categories: [] }
@@ -1023,7 +1033,7 @@ electron.ipcMain.handle('get-todo-data', async () => {
 })
 
 // 保存待办事项数据
-electron.ipcMain.handle('save-todo-data', async (_event, data: { todos: any[], projects: any[], categories?: any[] }) => {
+ipcMain.handle('save-todo-data', async (_event, data: { todos: any[], projects: any[], categories?: any[] }) => {
   try {
     const paths = getTodoDataPath()
     fs.writeFileSync(paths.dataPath, JSON.stringify(data, null, 2), 'utf-8')
@@ -1037,7 +1047,7 @@ electron.ipcMain.handle('save-todo-data', async (_event, data: { todos: any[], p
 // ========== Markdown 笔记文件管理 ==========
 
 // 读取目录内容
-electron.ipcMain.handle('md-read-directory', async (_event, dirPath: string) => {
+ipcMain.handle('md-read-directory', async (_event, dirPath: string) => {
   try {
     const items = fs.readdirSync(dirPath, { withFileTypes: true })
     const result = items
@@ -1057,7 +1067,7 @@ electron.ipcMain.handle('md-read-directory', async (_event, dirPath: string) => 
 })
 
 // 读取文件内容
-electron.ipcMain.handle('md-read-file', async (_event, filePath: string) => {
+ipcMain.handle('md-read-file', async (_event, filePath: string) => {
   try {
     const content = fs.readFileSync(filePath, 'utf-8')
     const stats = fs.statSync(filePath)
@@ -1076,7 +1086,7 @@ electron.ipcMain.handle('md-read-file', async (_event, filePath: string) => {
 })
 
 // 写入文件
-electron.ipcMain.handle('md-write-file', async (_event, filePath: string, content: string) => {
+ipcMain.handle('md-write-file', async (_event, filePath: string, content: string) => {
   try {
     fs.writeFileSync(filePath, content, 'utf-8')
     const stats = fs.statSync(filePath)
@@ -1093,7 +1103,7 @@ electron.ipcMain.handle('md-write-file', async (_event, filePath: string, conten
 })
 
 // 创建文件
-electron.ipcMain.handle('md-create-file', async (_event, filePath: string) => {
+ipcMain.handle('md-create-file', async (_event, filePath: string) => {
   try {
     fs.writeFileSync(filePath, '', 'utf-8')
     return { success: true }
@@ -1103,7 +1113,7 @@ electron.ipcMain.handle('md-create-file', async (_event, filePath: string) => {
 })
 
 // 创建文件夹
-electron.ipcMain.handle('md-create-directory', async (_event, dirPath: string) => {
+ipcMain.handle('md-create-directory', async (_event, dirPath: string) => {
   try {
     fs.mkdirSync(dirPath, { recursive: true })
     return { success: true }
@@ -1113,7 +1123,7 @@ electron.ipcMain.handle('md-create-directory', async (_event, dirPath: string) =
 })
 
 // 重命名文件/文件夹
-electron.ipcMain.handle('md-rename', async (_event, oldPath: string, newPath: string) => {
+ipcMain.handle('md-rename', async (_event, oldPath: string, newPath: string) => {
   try {
     fs.renameSync(oldPath, newPath)
     return { success: true }
@@ -1123,7 +1133,7 @@ electron.ipcMain.handle('md-rename', async (_event, oldPath: string, newPath: st
 })
 
 // 删除文件
-electron.ipcMain.handle('md-delete-file', async (_event, filePath: string) => {
+ipcMain.handle('md-delete-file', async (_event, filePath: string) => {
   try {
     fs.unlinkSync(filePath)
     return { success: true }
@@ -1133,7 +1143,7 @@ electron.ipcMain.handle('md-delete-file', async (_event, filePath: string) => {
 })
 
 // 删除文件夹
-electron.ipcMain.handle('md-delete-directory', async (_event, dirPath: string) => {
+ipcMain.handle('md-delete-directory', async (_event, dirPath: string) => {
   try {
     fs.rmSync(dirPath, { recursive: true, force: true })
     return { success: true }
@@ -1143,7 +1153,7 @@ electron.ipcMain.handle('md-delete-directory', async (_event, dirPath: string) =
 })
 
 // 检查文件是否存在
-electron.ipcMain.handle('md-exists', async (_event, path: string) => {
+ipcMain.handle('md-exists', async (_event, path: string) => {
   try {
     return { success: true, exists: fs.existsSync(path) }
   } catch (error: any) {
@@ -1152,7 +1162,7 @@ electron.ipcMain.handle('md-exists', async (_event, path: string) => {
 })
 
 // 读取图片文件为 base64 (保留向后兼容)
-electron.ipcMain.handle('md-read-image', async (_event, imagePath: string) => {
+ipcMain.handle('md-read-image', async (_event, imagePath: string) => {
   try {
     let cleanPath = decodeURIComponent(imagePath)
     cleanPath = cleanPath.replace(/^file:\/\//, '')

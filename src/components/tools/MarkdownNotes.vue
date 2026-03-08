@@ -1,16 +1,16 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useMdStore } from '../../stores/mdStore'
 import { useFileManager } from '../../composables/useFileManager'
-import { generateWechatHtml, copyHtmlToClipboard } from '../../composables/useMarkdownRenderer'
+import { generateWechatHtmlForPreview, generateWechatHtml, copyHtmlToClipboard } from '../../composables/useMarkdownRenderer'
 import FileTree from '../markdown/FileTree.vue'
-import MdEditor from '../markdown/MdEditor/index.vue'
-import type { OutlineItem, EditorMode, PreviewTheme } from '../markdown/MdEditor/types'
+import TyporaEditorTipTap from '../markdown/TyporaEditorTipTap/index.vue'
 import type { FileItem } from '../markdown/FileTree.vue'
+import type { PreviewTheme } from '../markdown/MdEditor/types'
 import {
   FolderOpened, CopyDocument, Folder, Plus, Refresh, FolderAdd, DocumentAdd
 } from '@element-plus/icons-vue'
-import { ElMessage, ElDialog } from 'element-plus'
+import { ElMessage } from 'element-plus'
 
 const mdStore = useMdStore()
 const { fileTree, isLoading, loadWorkspace, toggleFolder, readFile, saveFile: saveFileContent } = useFileManager()
@@ -25,9 +25,10 @@ const fileLoading = ref(false)  // 文件打开加载状态
 
 // 编辑器设置
 const autoSave = ref(true)
-const editorMode = ref<EditorMode>('wysiwyg')
 const previewTheme = ref<PreviewTheme>('default')
-const showOutline = ref(true)
+
+// 编辑器引用
+const editorRef = ref<InstanceType<typeof TyporaEditorTipTap>>()
 
 // 公众号复制对话框
 const showWechatDialog = ref(false)
@@ -45,8 +46,56 @@ const contextMenuX = ref(0)
 const contextMenuY = ref(0)
 const contextMenuItem = ref<FileItem | null>(null)
 
-// 编辑器引用
-const mdEditorRef = ref<InstanceType<typeof MdEditor>>()
+// ==================== 自动保存 ====================
+const isDirty = ref(false)  // 文件是否有未保存的修改
+const autoSaveTimer = ref<ReturnType<typeof setTimeout> | null>(null)
+const AUTO_SAVE_DELAY = 2000  // 2秒自动保存
+const lastSavedContent = ref('')  // 上次保存的内容
+
+/**
+ * 触发自动保存
+ */
+const triggerAutoSave = () => {
+  if (!autoSave.value) return
+  if (!selectedFile.value) return
+  
+  isDirty.value = true
+  
+  // 清除之前的定时器
+  if (autoSaveTimer.value) {
+    clearTimeout(autoSaveTimer.value)
+  }
+  
+  // 设置新的定时器
+  autoSaveTimer.value = setTimeout(() => {
+    if (isDirty.value && fileContent.value !== lastSavedContent.value) {
+      saveFile(false)
+      lastSavedContent.value = fileContent.value
+      isDirty.value = false
+    }
+  }, AUTO_SAVE_DELAY)
+}
+
+/**
+ * 立即保存（用于切换文件或离开页面）
+ */
+const saveImmediately = async () => {
+  if (autoSaveTimer.value) {
+    clearTimeout(autoSaveTimer.value)
+    autoSaveTimer.value = null
+  }
+  
+  if (isDirty.value && selectedFile.value && fileContent.value !== lastSavedContent.value) {
+    await saveFile(false)
+    lastSavedContent.value = fileContent.value
+    isDirty.value = false
+  }
+}
+
+// 监听文件内容变化
+watch(fileContent, () => {
+  triggerAutoSave()
+})
 
 // ==================== 初始化 ====================
 
@@ -58,14 +107,43 @@ onMounted(() => {
   }
 
   // 加载设置
-  const saved = localStorage.getItem('md-editor-settings')
+  const saved = localStorage.getItem('md-editor-settings-v2')
   if (saved) {
     const s = JSON.parse(saved)
     autoSave.value = s.autoSave ?? true
-    editorMode.value = s.editorMode ?? 'wysiwyg'
     previewTheme.value = s.previewTheme ?? 'default'
   }
+  
+  // 注册 Ctrl+S 快捷键
+  document.addEventListener('keydown', handleKeyDown)
 })
+
+onBeforeUnmount(() => {
+  // 组件卸载前保存
+  saveImmediately()
+  
+  // 移除快捷键监听
+  document.removeEventListener('keydown', handleKeyDown)
+})
+
+/**
+ * 处理键盘快捷键
+ */
+const handleKeyDown = (e: KeyboardEvent) => {
+  // Ctrl+S / Cmd+S 保存
+  if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+    e.preventDefault()
+    if (selectedFile.value) {
+      saveFile(true)  // 手动保存，显示提示
+      lastSavedContent.value = fileContent.value
+      isDirty.value = false
+      if (autoSaveTimer.value) {
+        clearTimeout(autoSaveTimer.value)
+        autoSaveTimer.value = null
+      }
+    }
+  }
+}
 
 // ==================== 方法 ====================
 
@@ -73,12 +151,34 @@ onMounted(() => {
  * 保存设置到本地存储
  */
 const saveSettings = () => {
-  localStorage.setItem('md-editor-settings', JSON.stringify({
+  localStorage.setItem('md-editor-settings-v2', JSON.stringify({
     autoSave: autoSave.value,
-    editorMode: editorMode.value,
     previewTheme: previewTheme.value
   }))
 }
+
+// 主题选项 - 恢复所有原有主题
+const themeOptions = [
+  // 推荐主题
+  { label: '极光蓝', value: 'default' },
+  { label: '霓虹幻彩', value: 'neon' },
+  { label: '落日余晖', value: 'sunset' },
+  { label: '深海静谧', value: 'ocean' },
+  { label: '浆果风暴', value: 'berry' },
+  { label: '森林秘境', value: 'forest' },
+  // 平台风格
+  { label: 'GitHub Pro', value: 'github' },
+  { label: 'Notion', value: 'notion' },
+  { label: 'Medium', value: 'medium' },
+  { label: '掘金', value: 'juejin' },
+  { label: '微信公众号', value: 'wechat' },
+  // 深色主题
+  { label: '极夜黑', value: 'dark' },
+  { label: '午夜蓝', value: 'midnight' },
+  { label: 'Dracula', value: 'dracula' },
+  // 特色主题
+  { label: '纸张质感', value: 'paper' }
+]
 
 /**
  * 选择工作区
@@ -113,6 +213,10 @@ const handleFileItemClick = async (item: FileItem) => {
  */
 const openFile = async (filePath: string) => {
   if (fileLoading.value) return
+  
+  // 先保存当前文件（如果已修改）
+  await saveImmediately()
+  
   fileLoading.value = true
 
   try {
@@ -123,6 +227,8 @@ const openFile = async (filePath: string) => {
     }
 
     fileContent.value = data.content
+    lastSavedContent.value = data.content  // 记录初始内容
+    isDirty.value = false
     fileInfo.value = {
       size: data.size,
       modifiedTime: data.modifiedTime,
@@ -218,41 +324,37 @@ const hideContextMenu = () => {
 
 /**
  * 保存文件
+ * @param isManual 是否手动保存（true=显示提示，false=自动保存不显示）
  */
-const saveFile = async () => {
+const saveFile = async (isManual = true) => {
   if (!selectedFile.value) return
   const success = await saveFileContent(selectedFile.value, fileContent.value)
-  if (success) {
+  if (success && isManual) {
     ElMessage.success({ message: '已保存', duration: 1000 })
   }
 }
 
 /**
- * 生成公众号内容
+ * 生成公众号内容（预览使用 CSS 类样式）
  */
 const generateWechatContent = () => {
-  const html = generateWechatHtml(fileContent.value, selectedFile.value, previewTheme.value)
+  const html = generateWechatHtmlForPreview(fileContent.value, selectedFile.value, 'default')
   wechatContent.value = html
   showWechatDialog.value = true
 }
 
 /**
- * 复制公众号内容
+ * 复制公众号内容（复制时使用内联样式）
  */
 const copyWechatContent = async () => {
-  const success = await copyHtmlToClipboard(wechatContent.value)
+  // 生成带内联样式的 HTML 用于复制
+  const inlineHtml = generateWechatHtml(fileContent.value, selectedFile.value, 'default')
+  const success = await copyHtmlToClipboard(inlineHtml)
   if (success) {
     ElMessage.success('已复制到剪贴板，可直接粘贴到公众号编辑器')
   } else {
     ElMessage.error('复制失败')
   }
-}
-
-/**
- * 处理大纲项点击
- */
-const handleOutlineClick = (item: OutlineItem) => {
-  mdEditorRef.value?.scrollToLine(item.line)
 }
 </script>
 
@@ -316,32 +418,43 @@ const handleOutlineClick = (item: OutlineItem) => {
     <div class="editor-area">
       <!-- 自定义工具栏扩展 -->
       <div class="editor-toolbar-extension">
-        <el-button
-          type="warning"
-          size="small"
-          :icon="CopyDocument"
-          @click="generateWechatContent"
-          :disabled="!fileContent"
-          title="生成公众号格式"
-        >
-          复制公众号
-        </el-button>
+        <div class="toolbar-right">
+          <el-select
+            v-model="previewTheme"
+            size="small"
+            style="width: 100px"
+            @change="saveSettings"
+            title="预览主题"
+          >
+            <el-option
+              v-for="option in themeOptions"
+              :key="option.value"
+              :label="option.label"
+              :value="option.value"
+            />
+          </el-select>
+          <el-button
+            type="warning"
+            size="small"
+            @click="generateWechatContent"
+            :disabled="!fileContent"
+            title="生成公众号格式"
+            class="wechat-btn"
+          >
+            <img src="@/assets/wx.png" alt="公众号" class="wechat-icon" />
+          </el-button>
+        </div>
       </div>
 
       <!-- Markdown 编辑器 -->
       <div class="editor-container" v-loading="fileLoading" element-loading-text="正在加载文件...">
-        <MdEditor
-          ref="mdEditorRef"
+        <TyporaEditorTipTap
+          ref="editorRef"
           v-model="fileContent"
-          v-model:mode="editorMode"
-          v-model:theme="previewTheme"
+          :theme="previewTheme"
           :file-path="selectedFile"
-          :auto-save="autoSave"
-          :show-outline="showOutline"
-          :disabled="!selectedFile"
-          @save="saveFile"
+          :placeholder="selectedFile ? '开始编写 Markdown...' : '请选择或创建一个文件'"
           @change="saveSettings"
-          @scroll-to-heading="handleOutlineClick"
         />
       </div>
     </div>
@@ -502,9 +615,24 @@ const handleOutlineClick = (item: OutlineItem) => {
 /* 编辑器工具栏扩展 */
 .editor-toolbar-extension {
   position: absolute;
-  top: 8px;
-  right: 220px;
+  top: 0px;
+  right: 0px;
   z-index: 10;
+}
+
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.wechat-btn {
+  padding: 6px !important;
+}
+
+.wechat-icon {
+  width: 16px;
+  height: 16px;
 }
 
 /* 编辑器容器 - 支持 Loading */
@@ -518,7 +646,7 @@ const handleOutlineClick = (item: OutlineItem) => {
 }
 
 /* 确保编辑器填充容器 */
-.editor-container :deep(.md-editor) {
+.editor-container :deep(.typora-tiptap-editor) {
   height: 100%;
 }
 
@@ -557,8 +685,10 @@ const handleOutlineClick = (item: OutlineItem) => {
 
 .wechat-content {
   padding: 20px;
-  background: #f9f9f9;
+  background: var(--theme-bg, #f9f9f9);
   border-radius: 4px;
+  color: var(--theme-text, #333);
+  font-family: var(--theme-font, -apple-system, BlinkMacSystemFont, sans-serif);
 }
 
 /* 新建对话框 */

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onErrorCaptured } from 'vue'
 import { useRouter } from 'vue-router'
 import { useToolStore } from '../stores/toolStore'
 import { useThemeStore } from '../stores/themeStore'
@@ -15,11 +15,20 @@ const router = useRouter()
 const toolStore = useToolStore()
 const themeStore = useThemeStore()
 
+// 捕获错误
+onErrorCaptured((err, instance, info) => {
+  console.error('ToolPage error:', err)
+  console.error('Component:', instance)
+  console.error('Info:', info)
+  return false
+})
+
 const handleBack = () => {
   router.push('/')
 }
 
 const currentComponent = computed(() => {
+  console.log('currentToolId:', toolStore.currentToolId)
   switch (toolStore.currentToolId) {
     case 'env-manager':
       return EnvManager
@@ -34,6 +43,7 @@ const currentComponent = computed(() => {
     case 'markdown-notes':
       return MarkdownNotes
     default:
+      console.warn('Unknown tool:', toolStore.currentToolId)
       return null
   }
 })

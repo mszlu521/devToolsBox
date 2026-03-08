@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer, shell } from 'electron'
+import { contextBridge, ipcRenderer } from 'electron'
 
 // 暴露给渲染进程的 API
 contextBridge.exposeInMainWorld('electronAPI', {
@@ -24,7 +24,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('read-file', filePath),
   
   // 外部链接
-  openExternal: (url: string) => shell.openExternal(url),
+  openExternal: (url: string) => ipcRenderer.invoke('open-external', url),
   
   // Host 管理
   getHostConfigs: () => ipcRenderer.invoke('get-host-configs'),

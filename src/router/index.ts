@@ -12,7 +12,7 @@ const routes = [
     path: '/tool/:id',
     name: 'ToolPage',
     component: ToolPage
-  }
+  },
 ]
 
 const router = createRouter({

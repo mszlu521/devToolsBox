@@ -55,5 +55,5 @@ export const tools: Tool[] = [
     icon: 'Document',
     component: 'MarkdownNotes',
     isAvailable: true
-  }
+  },
 ]

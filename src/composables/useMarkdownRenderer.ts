@@ -34,7 +34,7 @@ export const themeConfigs: Record<string, ThemeConfig> = {
     primary: '#4f46e5',
     secondary: '#7c3aed',
     accent: '#06b6d4',
-    codeBg: '#0f172a',
+    codeBg: '#1e1e2e',
     blockquoteBg: 'linear-gradient(135deg, #f0f7ff 0%, #f8f0ff 100%)',
     borderColor: '#e2e8f0',
     gradient: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #06b6d4 100%)',
@@ -53,7 +53,7 @@ export const themeConfigs: Record<string, ThemeConfig> = {
     primary: '#0969da',
     secondary: '#0550ae',
     accent: '#54aeff',
-    codeBg: '#f6f8fa',
+    codeBg: '#1e1e2e',
     blockquoteBg: '#f6f8fa',
     borderColor: '#d0d7de',
     gradient: 'linear-gradient(135deg, #0969da 0%, #54aeff 100%)',
@@ -72,7 +72,7 @@ export const themeConfigs: Record<string, ThemeConfig> = {
     primary: '#000000',
     secondary: '#37352f',
     accent: '#fd7e14',
-    codeBg: '#f5f5f5',
+    codeBg: '#1e1e2e',
     blockquoteBg: '#f7f6f3',
     borderColor: '#e3e2e0',
     gradient: 'linear-gradient(135deg, #000000 0%, #37352f 100%)',
@@ -91,7 +91,7 @@ export const themeConfigs: Record<string, ThemeConfig> = {
     primary: '#03a87c',
     secondary: '#029e74',
     accent: '#00ab6b',
-    codeBg: '#f7f9f9',
+    codeBg: '#1e1e2e',
     blockquoteBg: '#f7f9f9',
     borderColor: '#e5e5e5',
     gradient: 'linear-gradient(135deg, #03a87c 0%, #00ab6b 100%)',
@@ -110,7 +110,7 @@ export const themeConfigs: Record<string, ThemeConfig> = {
     primary: '#1e80ff',
     secondary: '#1171ee',
     accent: '#4da3ff',
-    codeBg: '#f4f5f5',
+    codeBg: '#1e1e2e',
     blockquoteBg: '#f7f8fa',
     borderColor: '#e4e6eb',
     gradient: 'linear-gradient(135deg, #1e80ff 0%, #4da3ff 100%)',
@@ -130,7 +130,7 @@ export const themeConfigs: Record<string, ThemeConfig> = {
     primary: '#f472b6',
     secondary: '#a78bfa',
     accent: '#22d3ee',
-    codeBg: '#0f172a',
+    codeBg: '#1e1e2e',
     blockquoteBg: 'linear-gradient(135deg, rgba(244,114,182,0.1) 0%, rgba(167,139,250,0.1) 100%)',
     borderColor: 'rgba(244,114,182,0.3)',
     gradient: 'linear-gradient(135deg, #f472b6 0%, #a78bfa 50%, #22d3ee 100%)',
@@ -149,7 +149,7 @@ export const themeConfigs: Record<string, ThemeConfig> = {
     primary: '#f97316',
     secondary: '#ea580c',
     accent: '#fbbf24',
-    codeBg: '#fffbeb',
+    codeBg: '#1e1e2e',
     blockquoteBg: 'linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%)',
     borderColor: '#fdba74',
     gradient: 'linear-gradient(135deg, #f97316 0%, #ea580c 50%, #fbbf24 100%)',
@@ -168,7 +168,7 @@ export const themeConfigs: Record<string, ThemeConfig> = {
     primary: '#0284c7',
     secondary: '#0369a1',
     accent: '#22d3ee',
-    codeBg: '#082f49',
+    codeBg: '#1e1e2e',
     blockquoteBg: 'linear-gradient(135deg, #e0f2fe 0%, #f0f9ff 100%)',
     borderColor: '#7dd3fc',
     gradient: 'linear-gradient(135deg, #0284c7 0%, #0369a1 50%, #22d3ee 100%)',
@@ -187,7 +187,7 @@ export const themeConfigs: Record<string, ThemeConfig> = {
     primary: '#16a34a',
     secondary: '#15803d',
     accent: '#4ade80',
-    codeBg: '#052e16',
+    codeBg: '#1e1e2e',
     blockquoteBg: 'linear-gradient(135deg, #dcfce7 0%, #f0fdf4 100%)',
     borderColor: '#86efac',
     gradient: 'linear-gradient(135deg, #16a34a 0%, #15803d 50%, #4ade80 100%)',
@@ -206,7 +206,7 @@ export const themeConfigs: Record<string, ThemeConfig> = {
     primary: '#db2777',
     secondary: '#be185d',
     accent: '#f472b6',
-    codeBg: '#500724',
+    codeBg: '#1e1e2e',
     blockquoteBg: 'linear-gradient(135deg, #fce7f3 0%, #fdf2f8 100%)',
     borderColor: '#f9a8d4',
     gradient: 'linear-gradient(135deg, #db2777 0%, #be185d 50%, #f472b6 100%)',
@@ -226,7 +226,7 @@ export const themeConfigs: Record<string, ThemeConfig> = {
     primary: '#818cf8',
     secondary: '#a78bfa',
     accent: '#22d3ee',
-    codeBg: '#1e293b',
+    codeBg: '#1e1e2e',
     blockquoteBg: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
     borderColor: '#334155',
     gradient: 'linear-gradient(135deg, #818cf8 0%, #a78bfa 50%, #22d3ee 100%)',
@@ -284,7 +284,7 @@ export const themeConfigs: Record<string, ThemeConfig> = {
     primary: '#07c160',
     secondary: '#00a650',
     accent: '#07c160',
-    codeBg: '#f4f4f4',
+    codeBg: '#1e1e2e',
     blockquoteBg: '#f7f7f7',
     borderColor: '#e5e5e5',
     gradient: 'linear-gradient(135deg, #07c160 0%, #00c853 100%)',
@@ -303,7 +303,7 @@ export const themeConfigs: Record<string, ThemeConfig> = {
     primary: '#d97706',
     secondary: '#b45309',
     accent: '#f59e0b',
-    codeBg: '#f5f0e8',
+    codeBg: '#1e1e2e',
     blockquoteBg: 'linear-gradient(135deg, #f5f0e8 0%, #faf7f2 100%)',
     borderColor: '#d6ccc2',
     gradient: 'linear-gradient(135deg, #d97706 0%, #b45309 100%)',
@@ -430,9 +430,8 @@ const generateCSSVariables = (config: ThemeConfig): string => {
 }
 
 // 生成主题样式 CSS（用于组件内样式）
-export const generateThemeStyles = (theme: string, isInline = false): string => {
+export const generateThemeStyles = (theme: string, prefix: string = '.wysiwyg-editor '): string => {
   const config = themeConfigs[theme] || themeConfigs.default
-  const prefix = isInline ? '' : '.wysiwyg-editor '
 
   return `
 ${prefix} {
@@ -605,7 +604,7 @@ ${prefix} ol > li::marker {
 
 /* ========== 代码块 - Mac 窗口风格 高对比度 ========== */
 ${prefix} code {
-  background: ${config.isDark ? 'rgba(255,255,255,0.12)' : '#f8fafc'};
+  background: ${config.codeBg} !important ;
   padding: 0.25rem 0.5rem;
   border-radius: 6px;
   color: ${config.isDark ? '#22d3ee' : '#0369a1'};
@@ -644,17 +643,17 @@ ${prefix} pre code {
   display: block;
   background: transparent;
   padding: 1.25rem;
-  color: #f8f8f2;
+  color: #abb2bf;
   font-size: 0.9rem;
   line-height: 1.8;
   overflow-x: auto;
   font-weight: 400;
 }
 
-/* 高对比度语法高亮 - Dracula 风格增强 */
+/* Atom One Dark 语法高亮样式 */
 ${prefix} .hljs {
   background: transparent;
-  color: #f8f8f2;
+  color: #abb2bf;
 }
 
 ${prefix} .hljs-keyword,
@@ -662,12 +661,12 @@ ${prefix} .hljs-selector-tag,
 ${prefix} .hljs-literal,
 ${prefix} .hljs-section,
 ${prefix} .hljs-link {
-  color: #ff79c6;
+  color: #c678dd;
   font-weight: 600;
 }
 
 ${prefix} .hljs-function .hljs-keyword {
-  color: #ff79c6;
+  color: #c678dd;
 }
 
 ${prefix} .hljs-string,
@@ -681,14 +680,14 @@ ${prefix} .hljs-addition,
 ${prefix} .hljs-variable,
 ${prefix} .hljs-template-tag,
 ${prefix} .hljs-template-variable {
-  color: #f1fa8c;
+  color: #98c379;
 }
 
 ${prefix} .hljs-comment,
 ${prefix} .hljs-quote,
 ${prefix} .hljs-deletion,
 ${prefix} .hljs-meta {
-  color: #6272a4;
+  color: #5c6370;
   font-style: italic;
 }
 
@@ -697,42 +696,42 @@ ${prefix} .hljs-regexp,
 ${prefix} .hljs-literal,
 ${prefix} .hljs-params,
 ${prefix} .hljs-constant {
-  color: #bd93f9;
+  color: #d19a66;
   font-weight: 600;
 }
 
 ${prefix} .hljs-class .hljs-title,
 ${prefix} .hljs-function .hljs-title {
-  color: #50fa7b;
+  color: #61afef;
   font-weight: 600;
 }
 
 ${prefix} .hljs-tag,
 ${prefix} .hljs-tag .hljs-name {
-  color: #ff79c6;
+  color: #e06c75;
 }
 
 ${prefix} .hljs-tag .hljs-attr {
-  color: #50fa7b;
+  color: #d19a66;
 }
 
 ${prefix} .hljs-tag .hljs-string {
-  color: #f1fa8c;
+  color: #98c379;
 }
 
 ${prefix} .hljs-built_in,
 ${prefix} .hljs-builtin-name {
-  color: #8be9fd;
+  color: #e6c07b;
   font-weight: 600;
 }
 
 ${prefix} .hljs-operator,
 ${prefix} .hljs-punctuation {
-  color: #ff79c6;
+  color: #56b6c2;
 }
 
 ${prefix} .hljs-property {
-  color: #8be9fd;
+  color: #61afef;
 }
 
 /* ========== 引用块 - 渐变边框卡片 ========== */
@@ -834,7 +833,7 @@ ${prefix} tr:hover td {
 }
 
 ${prefix} tbody tr:nth-child(even) {
-  background: ${config.isDark ? 'rgba(255,255,255,0.02)' : config.codeBg};
+  background: ${config.isDark ? 'rgba(255,255,255,0.02)' : config.borderColor};
 }
 
 /* ========== 图片 - 圆角阴影 ========== */
@@ -1004,8 +1003,8 @@ export const generateStyledHtml = (html: string, theme: string = 'default'): str
       color:${config.text};
     ">`)
 
-    // 行内代码
-    .replace(/<code>/g, `<code style="
+    // 行内代码（只匹配没有 class 属性的 code 标签，避免影响代码块）
+    .replace(/<code(?![^>]*class=)[^>]*>/g, `<code style="
       background:${isDark ? '#1e293b' : '#f1f5f9'};
       padding:0.25rem 0.5rem;
       border-radius:6px;
@@ -1015,8 +1014,8 @@ export const generateStyledHtml = (html: string, theme: string = 'default'): str
       font-weight:500;
     ">`)
 
-    // 代码块
-    .replace(/<pre>/g, `<pre style="
+    // 代码块（匹配带 class 的 pre 标签）
+    .replace(/<pre[^>]*>/g, `<pre style="
       background:${config.codeBg};
       border-radius:12px;
       padding:1.25rem;
@@ -1107,7 +1106,14 @@ export const renderMarkdown = (content: string, basePath?: string, theme: string
   }
 }
 
-// 生成微信公众号格式
+// 生成微信公众号格式（用于预览，使用 CSS 类）
+export const generateWechatHtmlForPreview = (content: string, basePath?: string, theme: string = 'default'): string => {
+  const html = renderMarkdown(content, basePath, theme)
+  const styles = generateThemeStyles(theme, '.wechat-content ')
+  return `<style>${styles}</style>${html}`
+}
+
+// 生成微信公众号格式（用于复制，使用内联样式）
 export const generateWechatHtml = (content: string, basePath?: string, theme: string = 'default'): string => {
   const html = renderMarkdown(content, basePath, theme)
   return generateStyledHtml(html, theme)

@@ -2,7 +2,7 @@
 import { useRouter } from 'vue-router'
 import { useToolStore } from '../stores/toolStore'
 import { useThemeStore } from '../stores/themeStore'
-import { Sunny, Moon } from '@element-plus/icons-vue'
+import { Sunny, Moon, EditPen } from '@element-plus/icons-vue'
 import * as ElementPlusIconsVue from '@element-plus/icons-vue'
 
 const router = useRouter()
@@ -10,11 +10,30 @@ const toolStore = useToolStore()
 const themeStore = useThemeStore()
 
 const getIcon = (iconName: string) => {
-  return (ElementPlusIconsVue as Record<string, any>)[iconName] || ElementPlusIconsVue.Tools
+  // 优先使用已导入的图标
+  const localIcons: Record<string, any> = {
+    Sunny,
+    Moon,
+    EditPen
+  }
+  
+  if (localIcons[iconName]) {
+    return localIcons[iconName]
+  }
+  
+  // 否则从 ElementPlusIconsVue 查找
+  const icon = (ElementPlusIconsVue as Record<string, any>)[iconName]
+  if (!icon) {
+    console.warn(`Icon not found: ${iconName}, using default`)
+    return ElementPlusIconsVue.Tools
+  }
+  return icon
 }
 
 const handleToolClick = (toolId: string) => {
+  console.log('Tool clicked:', toolId)
   const tool = toolStore.toolList.find(t => t.id === toolId)
+  console.log('Found tool:', tool)
   if (tool && tool.isAvailable !== false) {
     toolStore.switchTool(toolId)
     router.push(`/tool/${toolId}`)
@@ -22,7 +41,7 @@ const handleToolClick = (toolId: string) => {
 }
 
 const openLink = (url: string) => {
-  window.electronAPI.openExternal?.(url) || window.open(url, '_blank')
+  window.electronAPI?.openExternal?.(url) || window.open(url, '_blank')
 }
 </script>
 
@@ -33,7 +52,7 @@ const openLink = (url: string) => {
         <el-icon :size="40" color="#00d4aa"><Tools /></el-icon>
         <div class="brand-text">
           <h1>DevToolsBox</h1>
-          <a href="https://mszlu.com" target="_blank" class="author-link" @click.prevent="openLink('https://mszlu.com')">by mszlu.com</a>
+          <a href="https://www.mszlu.com" target="_blank" class="author-link" @click.prevent="openLink('https://www.mszlu.com')">by mszlu.com</a>
         </div>
       </div>
       <p class="subtitle">开发者工具箱 - 让开发更高效</p>
@@ -88,7 +107,7 @@ const openLink = (url: string) => {
     
     <div class="grid-footer">
       <div class="footer-links">
-        <a href="https://mszlu.com" @click.prevent="openLink('https://mszlu.com')">mszlu.com</a>
+        <a href="https://www.mszlu.com" @click.prevent="openLink('https://www.mszlu.com')">mszlu.com</a>
         <span class="divider">|</span>
         <span>DevToolsBox v1.0.0</span>
       </div>
